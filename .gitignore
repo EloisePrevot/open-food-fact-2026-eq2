@@ -1,0 +1,13 @@
+# Root pnpm workspace artifacts
+/node_modules/
+/pnpm-debug.log*
+**/node_modules/
+
+# Generated frontend builds
+**/dist/
+
+# IntelliJ configuration
+.idea/
+
+# Operating system files at the workspace root
+.DS_Store

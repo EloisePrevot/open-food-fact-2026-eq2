@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<ruleset name="Backend low-noise ruleset"
+         xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0 https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+    <description>
+        A curated, high-signal PMD ruleset. Focuses on real bugs and error-prone
+        constructs while excluding the opinionated/stylistic rules that generate
+        noise (formatting, comment requirements, brace-on-everything, etc.).
+        Formatting is already handled by Spotless + Google Java Format.
+    </description>
+
+    <!-- Real bugs: null handling, broken logic, resource leaks, bad comparisons. -->
+    <rule ref="category/java/errorprone.xml">
+        <!-- Too opinionated / high false-positive rate for this codebase. -->
+        <exclude name="AvoidLiteralsInIfCondition"/>
+        <exclude name="AvoidFieldNameMatchingMethodName"/>
+        <exclude name="AvoidDuplicateLiterals"/>
+        <exclude name="NullAssignment"/>
+        <exclude name="MissingSerialVersionUID"/>
+        <exclude name="AvoidFieldNameMatchingTypeName"/>
+    </rule>
+
+    <!-- Concurrency and correctness-affecting design issues. -->
+    <rule ref="category/java/multithreading.xml">
+        <exclude name="UseConcurrentHashMap"/>
+        <exclude name="DoNotUseThreads"/>
+    </rule>
+
+    <!-- Performance rules that flag genuinely wasteful patterns. -->
+    <rule ref="category/java/performance.xml">
+        <exclude name="AvoidInstantiatingObjectsInLoops"/>
+        <exclude name="RedundantFieldInitializer"/>
+    </rule>
+
+    <!-- A few high-value design rules only; the full set is very noisy. -->
+    <rule ref="category/java/design.xml/CollapsibleIfStatements"/>
+    <rule ref="category/java/design.xml/SimplifiedTernary"/>
+    <rule ref="category/java/design.xml/UselessOverridingMethod"/>
+    <rule ref="category/java/design.xml/LogicInversion"/>
+    <rule ref="category/java/design.xml/SwitchDensity"/>
+
+    <!-- Selected best-practice rules that catch real mistakes. -->
+    <rule ref="category/java/bestpractices.xml/UnusedLocalVariable"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateField"/>
+    <rule ref="category/java/bestpractices.xml/UnusedPrivateMethod"/>
+    <rule ref="category/java/bestpractices.xml/UnusedFormalParameter"/>
+    <rule ref="category/java/bestpractices.xml/UnusedAssignment"/>
+    <rule ref="category/java/bestpractices.xml/PrimitiveWrapperInstantiation"/>
+    <rule ref="category/java/bestpractices.xml/AvoidUsingHardCodedIP"/>
+
+</ruleset>

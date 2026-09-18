@@ -1,0 +1,234 @@
+# GitHub Actions CI pipeline for the archi monorepo.
+# Ported from .gitlab-ci.yml.
+
+name: CI
+
+# Build for pull requests and pushes to the default branch.
+# GitHub natively avoids duplicate branch + PR pipelines for the same commit.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ------------------------------------------------------------------------- #
+  # Detect which parts of the monorepo changed so downstream jobs can be
+  # path-scoped, mirroring GitLab's `changes:` rules.
+  # ------------------------------------------------------------------------- #
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+
+  # ========================================================================= #
+  # Backend (Java 25 / Gradle)
+  # ========================================================================= #
+  backend-format:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    container: eclipse-temurin:25-jdk
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('backend/build.gradle', 'backend/settings.gradle') }}
+          restore-keys: gradle-
+      - run: chmod +x ./gradlew
+      - run: ./gradlew --no-daemon spotlessCheck
+
+  backend-analysis:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    container: eclipse-temurin:25-jdk
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('backend/build.gradle', 'backend/settings.gradle') }}
+          restore-keys: gradle-
+      - run: chmod +x ./gradlew
+      - run: ./gradlew --no-daemon spotbugsMain
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-spotbugs
+          path: backend/build/reports/spotbugs/
+          retention-days: 7
+
+  backend-build:
+    needs: changes
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    container: eclipse-temurin:25-jdk
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('backend/build.gradle', 'backend/settings.gradle') }}
+          restore-keys: gradle-
+      - run: chmod +x ./gradlew
+      - run: ./gradlew --no-daemon assemble
+      - uses: actions/upload-artifact@v4
+        with:
+          name: backend-build
+          path: |
+            backend/build/libs/
+            backend/build/distributions/
+          retention-days: 7
+
+  backend-test:
+    needs: [changes, backend-build]
+    if: ${{ needs.changes.outputs.backend == 'true' }}
+    runs-on: ubuntu-latest
+    container: eclipse-temurin:25-jdk
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('backend/build.gradle', 'backend/settings.gradle') }}
+          restore-keys: gradle-
+      - run: chmod +x ./gradlew
+      - run: ./gradlew --no-daemon check jacocoTestReport
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-reports
+          path: |
+            backend/build/reports/tests/
+            backend/build/reports/jacoco/
+            backend/build/test-results/test/**/TEST-*.xml
+            backend/build/test-results/integrationTest/**/TEST-*.xml
+          retention-days: 7
+
+  # ========================================================================= #
+  # Frontend (React / Vite / pnpm)
+  # ========================================================================= #
+  frontend-lint:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @glo-4003/frontend lint
+
+  frontend-typecheck:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @glo-4003/frontend check
+
+  frontend-test:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @glo-4003/frontend test --reporter=default --reporter=junit --outputFile=junit.xml
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-junit
+          path: frontend/junit.xml
+          retention-days: 7
+
+  frontend-build:
+    needs: changes
+    if: ${{ needs.changes.outputs.frontend == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @glo-4003/frontend build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7

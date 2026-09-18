@@ -1,0 +1,188 @@
+# GitLab CI/CD pipeline for the archi monorepo.
+
+stages:
+  - build
+  - test
+
+# --------------------------------------------------------------------------- #
+# Pipeline rules: only build for merge requests and the default branch.
+# Avoids duplicate pipelines (branch + MR) via the workflow rules below.
+# --------------------------------------------------------------------------- #
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+# --------------------------------------------------------------------------- #
+# Reusable rule anchors for path-scoped execution.
+# --------------------------------------------------------------------------- #
+.backend-changes: &backend-changes
+  - "backend/**/*"
+
+.frontend-changes: &frontend-changes
+  - "frontend/**/*"
+  - "package.json"
+  - "pnpm-lock.yaml"
+  - "pnpm-workspace.yaml"
+
+# =========================================================================== #
+# Backend (Java 25 / Gradle)
+# =========================================================================== #
+.backend-base:
+  image: eclipse-temurin:25-jdk
+  variables:
+    GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+    GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+  cache:
+    key:
+      files:
+        - backend/build.gradle
+        - backend/settings.gradle
+    paths:
+      - .gradle/caches/
+      - .gradle/wrapper/
+  before_script:
+    - cd backend
+    - chmod +x ./gradlew
+
+backend:format:
+  extends: .backend-base
+  stage: build
+  script:
+    - ./gradlew --no-daemon spotlessCheck
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *backend-changes
+
+backend:analysis:
+  extends: .backend-base
+  stage: build
+  script:
+    - ./gradlew --no-daemon spotbugsMain
+  artifacts:
+    when: always
+    paths:
+      - backend/build/reports/spotbugs/
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *backend-changes
+
+backend:build:
+  extends: .backend-base
+  stage: build
+  script:
+    - ./gradlew --no-daemon assemble
+  artifacts:
+    paths:
+      - backend/build/libs/
+      - backend/build/distributions/
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *backend-changes
+
+backend:test:
+  extends: .backend-base
+  stage: test
+  needs:
+    - backend:build
+  script:
+    - ./gradlew --no-daemon check jacocoTestReport
+  coverage: '/Total coverage: \d+\.\d+%/'
+  artifacts:
+    when: always
+    paths:
+      - backend/build/reports/tests/
+      - backend/build/reports/jacoco/
+    reports:
+      junit:
+        - backend/build/test-results/test/**/TEST-*.xml
+        - backend/build/test-results/integrationTest/**/TEST-*.xml
+      coverage_report:
+        coverage_format: jacoco
+        path: backend/build/reports/jacoco/test/jacocoTestReport.xml
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *backend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *backend-changes
+
+# =========================================================================== #
+# Frontend (React / Vite / pnpm)
+# =========================================================================== #
+.frontend-base:
+  image: node:24-slim
+  variables:
+    PNPM_STORE: "$CI_PROJECT_DIR/.pnpm-store"
+  cache:
+    key:
+      files:
+        - pnpm-lock.yaml
+    paths:
+      - .pnpm-store/
+  before_script:
+    - corepack enable
+    - corepack prepare pnpm@11.21.0 --activate
+    - pnpm config set store-dir "$PNPM_STORE"
+    - pnpm install --frozen-lockfile
+
+frontend:lint:
+  extends: .frontend-base
+  stage: build
+  script:
+    - pnpm --filter @glo-4003/frontend lint
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *frontend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *frontend-changes
+
+frontend:typecheck:
+  extends: .frontend-base
+  stage: build
+  script:
+    - pnpm --filter @glo-4003/frontend check
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *frontend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *frontend-changes
+
+frontend:test:
+  extends: .frontend-base
+  stage: build
+  script:
+    - pnpm --filter @glo-4003/frontend test --reporter=default --reporter=junit --outputFile=junit.xml
+  artifacts:
+    when: always
+    reports:
+      junit: frontend/junit.xml
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *frontend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *frontend-changes
+
+frontend:build:
+  extends: .frontend-base
+  stage: build
+  script:
+    - pnpm --filter @glo-4003/frontend build
+  artifacts:
+    paths:
+      - frontend/dist/
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: *frontend-changes
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes: *frontend-changes

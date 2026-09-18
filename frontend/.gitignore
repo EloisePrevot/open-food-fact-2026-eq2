@@ -1,0 +1,17 @@
+# Dependencies
+/node_modules/
+
+# Vite build and tooling output
+/dist/
+/coverage/
+*.local
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Logs and operating system files
+*.log
+.DS_Store
+Thumbs.db
