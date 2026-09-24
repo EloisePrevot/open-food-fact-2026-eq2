@@ -5,7 +5,8 @@
 ```text
 /
 ├── backend/              # API REST Java
-└── frontend/             # SPA React
+├── frontend/             # SPA React
+└── etl/                  # Scripts Python d'extraction, transformation et chargement
 ```
 
 ### Technologies
@@ -88,3 +89,33 @@ pnpm backend:format   # corrige le formatage automatiquement
 ```
 
 Si `backend:verify` échoue sur le formatage, lancez `pnpm backend:format` puis relancez.
+
+### Docker
+
+`docker compose` démarre toute la pile : backend (`:80`), frontend (`:8081`),
+Qdrant (`:6333`) et MongoDB (`:27017`). SQLite reste un fichier local (`etl/data/`).
+
+Le backend répond sur le port **80** (exigence de l'énoncé) à la requête
+`GET /heartbeat`. Ce port est fixé par l'énoncé et ne doit pas être changé pour
+`8080`. Le frontend, lui, est publié sur `:8081`.
+
+```sh
+docker compose up -d --build   # construit et démarre tout
+docker compose down            # arrête tout
+```
+
+Points d'accès une fois la stack démarrée :
+
+| Service   | URL                              |
+| --------- | -------------------------------- |
+| Frontend  | http://localhost:8081            |
+| Heartbeat | http://localhost/heartbeat       |
+
+Le frontend affiche l'état de la connexion au backend sur la page d'accueil
+(badge « Connected » et nom de l'application renvoyé par `/heartbeat`).
+
+```sh
+# Vérifier le heartbeat du backend
+curl http://localhost/heartbeat
+# -> {"nomApplication":"Open Food Facts"}
+```

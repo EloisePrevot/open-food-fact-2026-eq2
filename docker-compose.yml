@@ -1,0 +1,48 @@
+services:
+  # API REST Java.
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "80:8080"
+    depends_on:
+      - mongodb
+      - qdrant
+
+  # SPA React servie par nginx.
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        # URL du backend telle que vue par le navigateur (port publié sur l'hôte).
+        VITE_API_BASE_URL: http://localhost:80
+    ports:
+      - "8081:80"
+    depends_on:
+      - backend
+
+  # Base vectorielle pour les embeddings.
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333" # API REST/HTTP
+      - "6334:6334" # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  mongodb:
+    image: mongo:8
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: root
+    volumes:
+      - mongodb_data:/data/db
+
+# SQLite est un fichier local (etl/data/), pas un service; il n'y a donc rien à
+# conteneuriser pour lui.
+volumes:
+  qdrant_data:
+  mongodb_data:

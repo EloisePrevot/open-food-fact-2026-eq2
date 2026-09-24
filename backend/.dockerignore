@@ -1,0 +1,7 @@
+build/
+.gradle/
+*.log
+.DS_Store
+start.sh
+start.bat
+README.md

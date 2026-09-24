@@ -1,0 +1,15 @@
+# Applies to builds using the repo root as context (frontend image).
+**/node_modules
+**/dist
+**/build
+**/.gradle
+.git
+.github
+.idea
+.vscode
+**/.DS_Store
+*.log
+
+# Other project areas not needed by the frontend build.
+backend
+etl

@@ -11,3 +11,7 @@
 
 # Operating system files at the workspace root
 .DS_Store
+
+# ETL local SQLite data (keep the folder, ignore the db files)
+/etl/data/*
+!/etl/data/.gitkeep

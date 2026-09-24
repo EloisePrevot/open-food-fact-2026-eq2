@@ -14,7 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 public class HeartbeatResourceIT {
-  private static final String HEARTBEAT_PATH = "/api/heartbeat";
+  private static final String HEARTBEAT_PATH = "/heartbeat";
   private static final Duration STARTUP_TIMEOUT = Duration.ofSeconds(30);
   private static final Duration POLL_INTERVAL = Duration.ofMillis(200);
 
