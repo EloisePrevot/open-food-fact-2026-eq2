@@ -1,0 +1,12 @@
+[project]
+name = "open-food-facts-elt"
+version = "0.1.0"
+description = "Data pipeline for Open Food Facts Québec"
+requires-python = ">=3.11"
+dependencies = [
+  "pymongo==4.15.4",
+  "qdrant-client==1.18.0",
+]
+
+[tool.uv]
+package = false

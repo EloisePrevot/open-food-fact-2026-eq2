@@ -12,9 +12,13 @@
 # Operating system files at the workspace root
 .DS_Store
 
-# ETL local SQLite data (keep the folder, ignore the db files)
-/etl/data/*
-!/etl/data/.gitkeep
+# ELT local SQLite data (keep the folder, ignore the db files)
+/elt/data/*
+!/elt/data/.gitkeep
+
+# Python virtual environments
+.venv/
 
 docs/
 enonce.pdf
+__pycache__

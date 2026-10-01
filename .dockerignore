@@ -12,4 +12,4 @@
 
 # Other project areas not needed by the frontend build.
 backend
-etl
+elt

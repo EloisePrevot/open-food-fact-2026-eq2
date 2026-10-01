@@ -12,7 +12,7 @@ services:
       QDRANT_PORT: "6334"
       SQLITE_JDBC_URL: jdbc:sqlite:/app/data/raw-data.db
     volumes:
-      - ./etl/data:/app/data
+      - ./elt/data:/app/data
     depends_on:
       - mongodb
       - qdrant
@@ -49,8 +49,7 @@ services:
     volumes:
       - mongodb_data:/data/db
 
-# SQLite est un fichier local (etl/data/), pas un service; il n'y a donc rien à
-# conteneuriser pour lui.
+# SQLite is a local file (elt/data/), not a service; it does not need a container.
 volumes:
   qdrant_data:
   mongodb_data:
