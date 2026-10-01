@@ -6,7 +6,7 @@
 /
 ├── backend/              # API REST Java
 ├── frontend/             # SPA React
-└── etl/                  # Scripts Python d'extraction, transformation et chargement
+└── elt/                  # Scripts Python d'extraction, transformation et chargement
 ```
 
 ### Technologies
@@ -69,10 +69,36 @@ cd backend
 ./gradlew run
 ```
 
-Sous Windows, utilisez `gradlew.bat run` et sous Linux/MacOS `./start.sh`. 
+Sous Windows, utilisez `gradlew.bat run` et sous Linux/MacOS `./start.sh`.
 Dans un second terminal, lancez le frontend depuis la racine :
 ```
 pnpm dev:frontend
+```
+
+### ELT
+
+Vérifiez les connexions :
+
+```sh
+uv run --project elt python -m elt.load --check-connections
+```
+
+Chargez les données CNF :
+
+```sh
+uv run --project elt python -m elt.load --load-raw cnf
+```
+
+Chargez les recettes Kaggle :
+
+```sh
+uv run --project elt python -m elt.load --load-raw kaggle
+```
+
+Chargez toutes les sources prises en charge :
+
+```sh
+uv run --project elt python -m elt.load --load-raw all
 ```
 
 ### Qualité (backend)
@@ -93,7 +119,7 @@ Si `backend:verify` échoue sur le formatage, lancez `pnpm backend:format` puis 
 ### Docker
 
 `docker compose` démarre toute la pile : backend (`:80`), frontend (`:8081`),
-Qdrant (`:6333`) et MongoDB (`:27017`). SQLite reste un fichier local (`etl/data/`).
+Qdrant (`:6333`) et MongoDB (`:27017`). SQLite reste un fichier local (`elt/db/`).
 
 Le backend répond sur le port **80** (exigence de l'énoncé) à la requête
 `GET /heartbeat`. Ce port est fixé par l'énoncé et ne doit pas être changé pour
@@ -151,11 +177,11 @@ mongodb://root:root@localhost:27017/?authSource=admin
 
 #### SQLite — fichier local, pas de serveur
 
-SQLite est un simple fichier dans `etl/data/` (aucun service, donc aucun panneau
+SQLite est un simple fichier dans `elt/db/` (aucun service, donc aucun panneau
 web). Inspectez-le avec le CLI `sqlite3` :
 
 ```sh
-sqlite3 etl/data/<nom-du-fichier>.db
+sqlite3 elt/db/<nom-du-fichier>.db
 # puis, dans le prompt : .tables  puis  .schema
 ```
 

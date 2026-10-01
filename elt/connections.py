@@ -12,6 +12,12 @@ from qdrant_client import QdrantClient
 from elt.config import Settings
 
 
+def open_sqlite_connection(settings: Settings) -> sqlite3.Connection:
+    """Ouvre SQLite au chemin configuré et prépare son dossier parent."""
+    settings.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+    return sqlite3.connect(settings.sqlite_path)
+
+
 @dataclass
 class DatabaseConnections:
     """Clients ouverts vers les trois moteurs utilisés par le pipeline."""
@@ -23,12 +29,10 @@ class DatabaseConnections:
 
     @classmethod
     def connect(cls, settings: Settings) -> DatabaseConnections:
-        settings.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-        sqlite_connection = sqlite3.connect(settings.sqlite_path)
         mongo_client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5_000)
 
         return cls(
-            sqlite=sqlite_connection,
+            sqlite=open_sqlite_connection(settings),
             mongo_client=mongo_client,
             mongo_database=mongo_client[settings.mongodb_database],
             qdrant=QdrantClient(url=settings.qdrant_url, timeout=5.0),
