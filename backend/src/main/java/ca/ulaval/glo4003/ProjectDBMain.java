@@ -1,7 +1,15 @@
 package ca.ulaval.glo4003;
 
+import ca.ulaval.glo4003.ws.api.data.DataResource;
+import ca.ulaval.glo4003.ws.api.data.DataResourceImpl;
+import ca.ulaval.glo4003.ws.api.documentation.DocumentationResource;
+import ca.ulaval.glo4003.ws.api.documentation.DocumentationResourceImpl;
 import ca.ulaval.glo4003.ws.api.heartbeat.HeartbeatResource;
 import ca.ulaval.glo4003.ws.api.heartbeat.HeartbeatResourceImpl;
+import ca.ulaval.glo4003.ws.api.matching.IngredientMatchingResource;
+import ca.ulaval.glo4003.ws.api.matching.IngredientMatchingResourceImpl;
+import ca.ulaval.glo4003.ws.api.recipe.RecipeResource;
+import ca.ulaval.glo4003.ws.api.recipe.RecipeResourceImpl;
 import ca.ulaval.glo4003.ws.shared.http.CORSResponseFilter;
 import java.net.URI;
 import org.eclipse.jetty.server.Server;
@@ -24,12 +32,20 @@ public class ProjectDBMain {
 
     LOGGER.info("Setup resources (API)");
     HeartbeatResource heartbeatResource = createHeartbeatResource();
+    DataResource dataResource = createDataResource();
+    DocumentationResource documentationResource = createDocumentationResource();
+    RecipeResource recipeResource = createRecipeResource();
+    IngredientMatchingResource ingredientMatchingResource = createIngredientMatchingResource();
 
     final AbstractBinder binder =
         new AbstractBinder() {
           @Override
           protected void configure() {
             bind(heartbeatResource).to(HeartbeatResource.class);
+            bind(dataResource).to(DataResource.class);
+            bind(documentationResource).to(DocumentationResource.class);
+            bind(recipeResource).to(RecipeResource.class);
+            bind(ingredientMatchingResource).to(IngredientMatchingResource.class);
           }
         };
 
@@ -68,5 +84,25 @@ public class ProjectDBMain {
   private static HeartbeatResource createHeartbeatResource() {
     LOGGER.info("Setup heartbeat resource");
     return new HeartbeatResourceImpl();
+  }
+
+  private static DataResource createDataResource() {
+    LOGGER.info("Setup data resource");
+    return new DataResourceImpl();
+  }
+
+  private static DocumentationResource createDocumentationResource() {
+    LOGGER.info("Setup documentation resource");
+    return new DocumentationResourceImpl();
+  }
+
+  private static RecipeResource createRecipeResource() {
+    LOGGER.info("Setup recipe resource");
+    return new RecipeResourceImpl();
+  }
+
+  private static IngredientMatchingResource createIngredientMatchingResource() {
+    LOGGER.info("Setup ingredient matching resource");
+    return new IngredientMatchingResourceImpl();
   }
 }
