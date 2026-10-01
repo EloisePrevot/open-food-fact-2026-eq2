@@ -15,3 +15,6 @@
 # ETL local SQLite data (keep the folder, ignore the db files)
 /etl/data/*
 !/etl/data/.gitkeep
+
+docs/
+enonce.pdf
