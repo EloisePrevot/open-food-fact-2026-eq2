@@ -1,5 +1,7 @@
 package ca.ulaval.glo4003.ws.api.recipe;
 
+import ca.ulaval.glo4003.ws.api.recipe.dto.CookRequestDto;
+import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeSearchRequestDto;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
@@ -20,11 +22,11 @@ public interface RecipeResource {
   @Path("/recette")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  Response searchRecipes(Object request);
+  Response searchRecipes(RecipeSearchRequestDto request);
 
   @POST
   @Path("/cuisiner")
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
-  Response cook(Object request);
+  Response cook(CookRequestDto request);
 }
