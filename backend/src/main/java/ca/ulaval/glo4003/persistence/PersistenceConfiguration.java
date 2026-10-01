@@ -18,7 +18,7 @@ public record PersistenceConfiguration(
   private static final String DEFAULT_MONGODB_DATABASE = "open_food_facts";
   private static final String DEFAULT_QDRANT_HOST = "localhost";
   private static final int DEFAULT_QDRANT_PORT = 6334;
-  private static final String DEFAULT_SQLITE_JDBC_URL = "jdbc:sqlite:../elt/data/raw-data.db";
+  private static final String DEFAULT_SQLITE_JDBC_URL = "jdbc:sqlite:../elt/db/raw-data.db";
 
   public static PersistenceConfiguration fromEnvironment() {
     return new PersistenceConfiguration(

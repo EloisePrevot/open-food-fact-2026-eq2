@@ -11,6 +11,7 @@ from pathlib import Path
 class Settings:
     """Valeurs de connexion lues une seule fois au démarrage du pipeline."""
 
+    raw_directory: Path
     sqlite_path: Path
     mongodb_uri: str
     mongodb_database: str
@@ -18,10 +19,13 @@ class Settings:
 
     @classmethod
     def from_environment(cls) -> Settings:
-        data_directory = Path(getenv("ELT_DATA_DIRECTORY", Path(__file__).parent / "data"))
+        pipeline_directory = Path(__file__).parent
+        raw_directory = Path(getenv("ELT_RAW_DIRECTORY", pipeline_directory / "raw"))
+        database_directory = Path(getenv("ELT_DATABASE_DIRECTORY", pipeline_directory / "db"))
 
         return cls(
-            sqlite_path=Path(getenv("SQLITE_PATH", data_directory / "raw-data.db")),
+            raw_directory=raw_directory,
+            sqlite_path=Path(getenv("SQLITE_PATH", database_directory / "raw-data.db")),
             mongodb_uri=getenv(
                 "MONGODB_URI",
                 "mongodb://root:root@localhost:27017/?authSource=admin",

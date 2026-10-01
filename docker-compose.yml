@@ -10,9 +10,9 @@ services:
       MONGODB_DATABASE: open_food_facts
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6334"
-      SQLITE_JDBC_URL: jdbc:sqlite:/app/data/raw-data.db
+      SQLITE_JDBC_URL: jdbc:sqlite:/app/db/raw-data.db
     volumes:
-      - ./elt/data:/app/data
+      - ./elt/db:/app/db
     depends_on:
       - mongodb
       - qdrant
@@ -49,7 +49,7 @@ services:
     volumes:
       - mongodb_data:/data/db
 
-# SQLite is a local file (elt/data/), not a service; it does not need a container.
+# SQLite is a local file (elt/db/), not a service; it does not need a container.
 volumes:
   qdrant_data:
   mongodb_data:
