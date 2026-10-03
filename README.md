@@ -119,3 +119,44 @@ Le frontend affiche l'état de la connexion au backend sur la page d'accueil
 curl http://localhost/heartbeat
 # -> {"nomApplication":"Open Food Facts"}
 ```
+
+### Inspecter les bases de données
+
+#### Qdrant: tableau de bord web intégré
+
+Une fois la pile démarrée, ouvrez :
+
+```
+http://localhost:6333/dashboard
+```
+
+Vous y trouverez les collections, un explorateur de points et une console API.
+L'API REST brute reste accessible sur `http://localhost:6333` (ex. `GET
+http://localhost:6333/collections`).
+
+#### MongoDB — CLI ou interface graphique
+
+Via `mongosh` directement dans le conteneur :
+
+```sh
+docker compose exec mongodb mongosh -u root -p root --authenticationDatabase admin
+```
+
+Via une interface graphique (MongoDB Compass) depuis l'hôte, utilisez la chaîne
+de connexion :
+
+```
+mongodb://root:root@localhost:27017/?authSource=admin
+```
+
+#### SQLite — fichier local, pas de serveur
+
+SQLite est un simple fichier dans `etl/data/` (aucun service, donc aucun panneau
+web). Inspectez-le avec le CLI `sqlite3` :
+
+```sh
+sqlite3 etl/data/<nom-du-fichier>.db
+# puis, dans le prompt : .tables  puis  .schema
+```
+
+Ou avec une interface graphique comme [DB Browser for SQLite](https://sqlitebrowser.org/).
