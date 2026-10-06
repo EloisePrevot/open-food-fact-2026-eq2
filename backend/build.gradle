@@ -213,12 +213,23 @@ tasks.named('test') {
 }
 
 tasks.register('integrationTest', Test) {
-    description = 'Runs the integration tests.'
+    description = 'Runs self-contained integration tests (no external databases required).'
     group = 'verification'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     include '**/*IT.class'
+    // Database-backed tests require running services; keep them out of the default build.
+    exclude '**/*DatabaseIT.class'
     shouldRunAfter tasks.named('test')
+}
+
+tasks.register('databaseTest', Test) {
+    description = 'Runs integration tests that require running MongoDB, Qdrant and SQLite.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/*DatabaseIT.class'
+    shouldRunAfter tasks.named('integrationTest')
 }
 
 tasks.named('check') {
