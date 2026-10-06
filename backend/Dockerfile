@@ -8,7 +8,8 @@ WORKDIR /app
 COPY gradlew ./
 COPY gradle ./gradle
 COPY settings.gradle build.gradle gradle.properties ./
-RUN chmod +x ./gradlew && ./gradlew --no-daemon dependencies || true
+# Strip any CRLF line endings (e.g. from Windows checkouts) so /bin/sh can run the script.
+RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew && ./gradlew --no-daemon dependencies || true
 
 # Build the application distribution.
 COPY config ./config
