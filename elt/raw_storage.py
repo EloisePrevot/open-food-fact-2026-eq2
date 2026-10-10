@@ -8,7 +8,7 @@ import sqlite3
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from elt.raw_models import RawArtifact, RawRecord
+from raw_models import RawArtifact, RawRecord
 
 
 class RawDataStore:

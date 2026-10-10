@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
-from elt.config import Settings
-from elt.connections import DatabaseConnections
-from elt.raw_models import RawArtifact
+from config import Settings
+from connections import DatabaseConnections
+from raw_models import RawArtifact
 
 CNF_SOURCE = "canadian_nutrient_file"
 KAGGLE_SOURCE = "extended_recipes_dataset"

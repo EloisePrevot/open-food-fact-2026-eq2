@@ -9,7 +9,7 @@ from pymongo import MongoClient
 from pymongo.database import Database
 from qdrant_client import QdrantClient
 
-from elt.config import Settings
+from config import Settings
 
 
 def open_sqlite_connection(settings: Settings) -> sqlite3.Connection:

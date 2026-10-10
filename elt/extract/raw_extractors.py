@@ -10,7 +10,7 @@ from typing import Any
 
 import ijson
 
-from elt.raw_models import RawArtifact, RawRecord
+from raw_models import RawArtifact, RawRecord
 
 
 class RawRecordExtractor(ABC):
