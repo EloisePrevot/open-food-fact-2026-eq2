@@ -1,0 +1,14 @@
+**
+!backend/gradlew
+!backend/gradle/**
+!backend/settings.gradle
+!backend/build.gradle
+!backend/gradle.properties
+!backend/config/**
+!backend/src/**
+!elt/**
+elt/.venv
+elt/raw
+elt/db
+elt/snapshots
+**/__pycache__

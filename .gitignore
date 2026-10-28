@@ -17,6 +17,7 @@
 !/elt/raw/.gitkeep
 /elt/db/*
 !/elt/db/.gitkeep
+/elt/snapshots/
 
 # Python virtual environments
 .venv/

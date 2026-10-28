@@ -49,8 +49,19 @@ class RawDataStore:
                 ON raw_records(artifact_id, payload_sha256);
             """
         )
+        self._normalize_legacy_paths()
 
-    def ingest(self, artifact: RawArtifact, records: Iterable[RawRecord]) -> int:
+    def _normalize_legacy_paths(self) -> None:
+        with self._connection:
+            self._connection.execute(
+                """
+                UPDATE OR IGNORE raw_artifacts
+                SET relative_path = REPLACE(relative_path, '\\', '/')
+                WHERE INSTR(relative_path, '\\') > 0
+                """
+            )
+
+    def ingest(self, artifact: RawArtifact, records: Iterable[RawRecord]) -> int | None:
         """Enregistre un artefact une seule fois par contenu et chemin source."""
         artifact_hash = self._hash_file(artifact)
         existing_artifact = self._connection.execute(
@@ -63,7 +74,7 @@ class RawDataStore:
         ).fetchone()
 
         if existing_artifact is not None:
-            return 0
+            return None
 
         with self._connection:
             cursor = self._connection.execute(

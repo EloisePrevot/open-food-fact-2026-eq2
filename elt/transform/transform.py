@@ -1,63 +1,37 @@
-"""Transformation: nettoie et met en forme les données extraites."""
-
 from __future__ import annotations
 
-import json
+import sqlite3
+from collections import Counter
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from typing import Any
 
-from config import Settings
-from connections import DatabaseConnections
-from transform.recipe_qdrant_transform import RecipeQdrantTransform
-from transform.ingredient_qdrant_transform import IngredientQdrantTransform
+from extract.extract import CNF_SOURCE, KAGGLE_SOURCE, OFF_SOURCE
+from transform import cnf_foods, off_products, recipes
+from transform.qdrant_points import product_point, recipe_point
+
+RECIPE = "recipe"
+PRODUCT = "product"
+
+Documents = Callable[[sqlite3.Connection, Counter], Iterator[dict[str, Any]]]
 
 
-def open_transformation_connections(settings: Settings | None = None) -> DatabaseConnections:
-    """Ouvre les moteurs nécessaires au rejeu des transformations, sans les exécuter."""
-    return DatabaseConnections.connect(settings or Settings.from_environment())
+@dataclass(frozen=True)
+class DocumentSource:
+    label: str
+    source: str
+    raw_source: str
+    kind: str
+    documents: Documents
+    to_point: Callable[[dict[str, Any]], dict[str, Any]]
 
 
-def transform_recipes(connection_factory: Callable[[], DatabaseConnections]) -> Iterator[dict[str, Any]]:
-    """Récupère et transforme les données brutes des recettes."""
-    with connection_factory() as connections:
-        cursor = connections.sqlite.execute(
-            """
-            SELECT payload_json 
-            FROM raw_records 
-            WHERE artifact_id IN (
-                SELECT artifact_id 
-                FROM raw_artifacts 
-                WHERE source = 'extended_recipes_dataset'
-            )
-            """
-        )
-        for row in cursor:
-            raw_payload = json.loads(row[0])
-            yield RecipeQdrantTransform.transform(raw_payload)
-
-
-def transform_ingredients(connection_factory: Callable[[], DatabaseConnections]) -> Iterator[dict[str, Any]]:
-    with connection_factory() as connections:
-        cursor = connections.sqlite.execute(
-            """
-            SELECT payload_json 
-            FROM raw_records 
-            WHERE artifact_id IN (
-                SELECT artifact_id 
-                FROM raw_artifacts 
-                WHERE source = 'canadian_nutrient_file'
-            )
-            """
-        )
-        for row in cursor:
-            raw_payload = json.loads(row[0])
-            yield IngredientQdrantTransform.transform(raw_payload)
-
-
-def run_all_transformations(settings: Settings | None = None) -> dict[str, list[dict[str, Any]]]:
-    connection_factory = lambda: open_transformation_connections(settings)
-
-    return {
-        "recipes": list(transform_recipes(connection_factory)),
-        "ingredients": list(transform_ingredients(connection_factory)),
-    }
+DOCUMENT_SOURCES = (
+    DocumentSource("recettes", recipes.SOURCE, KAGGLE_SOURCE, RECIPE, recipes.recipe_documents, recipe_point),
+    DocumentSource(
+        "aliments CNF", cnf_foods.SOURCE, CNF_SOURCE, PRODUCT, cnf_foods.cnf_food_documents, product_point
+    ),
+    DocumentSource(
+        "produits OFF", off_products.SOURCE, OFF_SOURCE, PRODUCT, off_products.off_product_documents, product_point
+    ),
+)

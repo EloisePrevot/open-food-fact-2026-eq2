@@ -1,5 +1,3 @@
-"""Orchestrateur principal du projet elt."""
-
 from __future__ import annotations
 
 import sys

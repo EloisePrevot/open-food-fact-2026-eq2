@@ -12,5 +12,7 @@ public interface RecipeRepository {
 
   List<RecipeDocument> findByIds(List<String> ids);
 
+  List<RecipeDocument> findFirst(Optional<String> recipeType, int limit);
+
   List<String> findTypes();
 }

@@ -5,8 +5,6 @@ from __future__ import annotations
 import csv
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
-from pathlib import Path
-from typing import Any
 
 import ijson
 
@@ -24,9 +22,12 @@ class RawRecordExtractor(ABC):
 class CsvRecordExtractor(RawRecordExtractor):
     """Lit un CSV avec le module standard, y compris les champs multi-lignes."""
 
+    delimiter = ","
+    quoting = csv.QUOTE_MINIMAL
+
     def extract(self, artifact: RawArtifact) -> Iterator[RawRecord]:
         with artifact.path.open("r", encoding=artifact.encoding, newline="") as source_file:
-            reader = csv.reader(source_file)
+            reader = csv.reader(source_file, delimiter=self.delimiter, quoting=self.quoting)
             raw_headers = next(reader, None)
 
             if raw_headers is None:
@@ -57,6 +58,21 @@ class CsvRecordExtractor(RawRecordExtractor):
         return headers
 
 
+class TsvRecordExtractor(CsvRecordExtractor):
+    """Lit l'export Open Food Facts : séparateur tabulation, aucun guillemet de protection.
+
+    QUOTE_NONE : OFF ne protège pas ses champs, un guillemet en début de champ
+    est une donnée et ne doit pas avaler les lignes suivantes.
+    """
+
+    delimiter = "\t"
+    quoting = csv.QUOTE_NONE
+
+    def extract(self, artifact: RawArtifact) -> Iterator[RawRecord]:
+        csv.field_size_limit(10_000_000)
+        yield from super().extract(artifact)
+
+
 class JsonArrayRecordExtractor(RawRecordExtractor):
     """Lit en flux les objets d’un tableau JSON racine."""
 
@@ -75,6 +91,7 @@ def extractor_for(artifact: RawArtifact) -> RawRecordExtractor:
     """Choisit l’extracteur selon le type de média de l’artefact."""
     extractors: dict[str, RawRecordExtractor] = {
         "text/csv": CsvRecordExtractor(),
+        "text/tab-separated-values": TsvRecordExtractor(),
         "application/json": JsonArrayRecordExtractor(),
     }
 

@@ -12,10 +12,12 @@ class Settings:
     """Valeurs de connexion lues une seule fois au démarrage du pipeline."""
 
     raw_directory: Path
+    off_file: Path
     sqlite_path: Path
     mongodb_uri: str
     mongodb_database: str
     qdrant_url: str
+    snapshot_directory: Path
 
     @classmethod
     def from_environment(cls) -> Settings:
@@ -25,6 +27,7 @@ class Settings:
 
         return cls(
             raw_directory=raw_directory,
+            off_file=Path(getenv("ELT_OFF_FILE", raw_directory / "off.csv")),
             sqlite_path=Path(getenv("SQLITE_PATH", database_directory / "raw-data.db")),
             mongodb_uri=getenv(
                 "MONGODB_URI",
@@ -32,4 +35,7 @@ class Settings:
             ),
             mongodb_database=getenv("MONGODB_DATABASE", "open_food_facts"),
             qdrant_url=getenv("QDRANT_URL", "http://localhost:6333"),
+            snapshot_directory=Path(
+                getenv("ELT_SNAPSHOT_DIRECTORY", pipeline_directory / "snapshots")
+            ),
         )

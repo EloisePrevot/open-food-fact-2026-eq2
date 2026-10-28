@@ -2,7 +2,8 @@ services:
   # API REST Java.
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "80:8080"
     environment:
@@ -11,11 +12,19 @@ services:
       QDRANT_HOST: qdrant
       QDRANT_PORT: "6334"
       SQLITE_JDBC_URL: jdbc:sqlite:/app/db/raw-data.db
+      ELT_AU_DEMARRAGE: "true"
+      ELT_LIMITE: "5000"
+      ELT_RAW_DIRECTORY: /app/elt/raw
+      SQLITE_PATH: /app/db/raw-data.db
+      QDRANT_URL: http://qdrant:6333
     volumes:
       - ./elt/db:/app/db
+      - ./elt/raw:/app/elt/raw:ro
     depends_on:
-      - mongodb
-      - qdrant
+      mongo-restore:
+        condition: service_completed_successfully
+      qdrant:
+        condition: service_started
 
   # SPA React servie par nginx.
   frontend:
@@ -30,14 +39,31 @@ services:
     depends_on:
       - backend
 
-  # Base vectorielle pour les embeddings.
+  # Télécharge une seule fois les données déjà préparées (snapshots Qdrant et dump MongoDB).
+  snapshots:
+    image: curlimages/curl:8.11.1
+    user: "0:0"
+    entrypoint: ["sh", "/scripts/fetch-snapshots.sh"]
+    environment:
+      SNAPSHOTS_URL: ${SNAPSHOTS_URL:-https://github.com/EloisePrevot/open-food-fact-2026-eq2/releases/download/snapshots}
+    volumes:
+      - snapshots:/snapshots
+      - ./docker/snapshots/fetch-snapshots.sh:/scripts/fetch-snapshots.sh:ro
+
+  # Base vectorielle pour les embeddings, restaurée depuis les snapshots si elle est vide.
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.19.1
+    entrypoint: ["sh", "/scripts/start-with-snapshots.sh"]
     ports:
       - "6333:6333" # API REST/HTTP
       - "6334:6334" # gRPC
     volumes:
       - qdrant_data:/qdrant/storage
+      - snapshots:/snapshots:ro
+      - ./docker/qdrant/start-with-snapshots.sh:/scripts/start-with-snapshots.sh:ro
+    depends_on:
+      snapshots:
+        condition: service_completed_successfully
 
   mongodb:
     image: mongo:8
@@ -48,8 +74,45 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: root
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "mongodb://root:root@mongodb:27017/?authSource=admin", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Restaure le dump MongoDB publié si la base est vide.
+  mongo-restore:
+    image: mongo:8
+    entrypoint: ["sh", "/scripts/restore.sh"]
+    environment:
+      MONGODB_URI: mongodb://root:root@mongodb:27017/?authSource=admin
+      MONGODB_DATABASE: open_food_facts
+    volumes:
+      - snapshots:/snapshots:ro
+      - ./docker/mongo/restore.sh:/scripts/restore.sh:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      snapshots:
+        condition: service_completed_successfully
+
+  # Exporte MongoDB vers elt/snapshots/ : docker compose run --rm mongo-dump
+  mongo-dump:
+    image: mongo:8
+    profiles: ["export"]
+    entrypoint: ["sh", "/scripts/dump.sh"]
+    environment:
+      MONGODB_URI: mongodb://root:root@mongodb:27017/?authSource=admin
+      MONGODB_DATABASE: open_food_facts
+    volumes:
+      - ./elt/snapshots:/export
+      - ./docker/mongo/dump.sh:/scripts/dump.sh:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
 
 # SQLite is a local file (elt/db/), not a service; it does not need a container.
 volumes:
   qdrant_data:
+  snapshots:
   mongodb_data:
