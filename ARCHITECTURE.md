@@ -1,9 +1,9 @@
 # Architecture.md
 
-## Moteur 1 : SQLite - SQL
+## Moteur 1 :  PostgreSQL - SQL
 
 ### 1. Type de données conservées
-Les données conservées dans ce moteur sont les données brutes extraites de nos trois sources de données. Nous avons choisi de conserver les données brutes dans un moteur SQL, puisqu’elles peuvent être téléchargées au format CSV, qui peut facilement se convertir en SQL. Nous avons également choisi le moteur SQLite pour sa simplicité d’utilisation et pour sa facilité de conversion de CSV en une base de données SQLite.
+Les données conservées dans ce moteur sont les données brutes extraites de nos trois sources de données. Nous avons choisi de conserver les données brutes dans un moteur SQL, puisqu’elles peuvent être téléchargées au format CSV, qui peut facilement se convertir en SQL. Nous avons également choisi le moteur PostgreSQL pour sa simplicité d’utilisation et pour sa facilité de conversion de CSV en une base de données SQL.
 
 ### 2. Exemple réel de chaque donnée conservée
 **Recettes**
@@ -373,7 +373,7 @@ Les données conservées dans ce moteur sont les données brutes extraites de no
 | `YieldDescriptionF` | `quantité requise pour préparer  100ml` |
 
 ### 3. Modèle de données envisagé
-Nos trois sources de données contiennent 14 fichiers CSV. Le moteur SQLite va ainsi contenir une table par fichier, soit 14 tables. 
+Nos trois sources de données contiennent 14 fichiers CSV. Le moteur PostgreSQL va ainsi contenir une table par fichier, soit 14 tables. 
 * La source de recettes représente une seule table.
 * La source OFF contient les produits à code barre et représente une seule table.
 * La source CNF contient les produits de base et représente 12 tables.
@@ -381,8 +381,8 @@ Nos trois sources de données contiennent 14 fichiers CSV. Le moteur SQLite va a
 ### 4. Requêtes de l'application servies
 | Route | Moteur |
 | --- | --- |
-| GET /donnees_brutes/{identifiant} | SQLite |
-| GET /extracted_data | SQLite |
+| GET /donnees_brutes/{identifiant} | PostgreSQL |
+| GET /extracted_data | PostgreSQL |
 
 ### 5. Données présentes dans plus d'un moteur
 Les données de ces modèles sont dans la plupart des cas utilisés dans une autre base de données. Par exemple, les produits de l'Amérique du Nord de OFF et les autres éléments des bases de données de recette et la CNF se retrouve dans la base de données Mongo. Puisque cette base de données sert seulement à chercher données sans filtres, la priorité sera toujours les données traitées, c’est à dire Mongo. 
@@ -392,7 +392,7 @@ Les données de ces modèles sont dans la plupart des cas utilisés dans une aut
 Cette BD doit simplement contenir les données brutes et l'importation des données peut se faire très facilement grâce à un script Python. Ce moteur peut aussi être utilisé en lecture seul, ce qui garantit l'immuabilité des données. Il est aussi possible de créer des index pour accélérer la lecture des données.
 
 **Maintenabilité**
-Il y a peu de de maintenance à faire dans cette BD, puisque c'est un seul fichier dans le projet qui nécessite aucune configuration.
+PostgreSQL est portable et extensible, ce qui permet d'avoir une meilleure maintenabilité. Il y a des outils visuels si la nécessité se présente. PostgreSQL est supporté par beaucoup de plateformes. C'est un des plus utilisés, donc il y a plus de documentations.
 
 **Extensibilité**
 Ajouter une source ne demande aucune modification du schéma : il suffit d'une nouvelle valeur de `source`. Si une règle de transformation change, on reconstruit la BD2 et la BD3 à partir de la BD1 sans retélécharger les sources.

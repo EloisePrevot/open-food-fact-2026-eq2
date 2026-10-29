@@ -1,0 +1,17 @@
+{
+  "qdrantVersion": "1.19.1",
+  "modeleEmbedding": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+  "creeLe": "2026-10-28T20:20:27.951793+00:00",
+  "collections": {
+    "recipes": {
+      "fichier": "recipes.snapshot",
+      "points": 300,
+      "octets": 1507328
+    },
+    "ingredients": {
+      "fichier": "ingredients.snapshot",
+      "points": 600,
+      "octets": 3176960
+    }
+  }
+}
