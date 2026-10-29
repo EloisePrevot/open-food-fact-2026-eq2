@@ -14,8 +14,8 @@ import ca.ulaval.glo4003.persistence.PersistenceConfiguration;
 import ca.ulaval.glo4003.persistence.mongo.MongoProductRepository;
 import ca.ulaval.glo4003.persistence.mongo.MongoRawReferenceRepository;
 import ca.ulaval.glo4003.persistence.mongo.MongoRecipeRepository;
+import ca.ulaval.glo4003.persistence.postgres.PostgresRawRecordRepository;
 import ca.ulaval.glo4003.persistence.qdrant.QdrantRecipeSearchRepository;
-import ca.ulaval.glo4003.persistence.sqlite.SqliteRawRecordRepository;
 import ca.ulaval.glo4003.ws.api.data.DataResource;
 import ca.ulaval.glo4003.ws.api.data.DataResourceImpl;
 import ca.ulaval.glo4003.ws.api.documentation.DocumentationResource;
@@ -113,7 +113,7 @@ public class ProjectDBMain {
     LOGGER.info("Setup data resource");
     return new DataResourceImpl(
         new DataService(
-            new SqliteRawRecordRepository(persistenceClients),
+            new PostgresRawRecordRepository(persistenceClients),
             new MongoRawReferenceRepository(persistenceClients),
             new MongoProductRepository(persistenceClients)));
   }

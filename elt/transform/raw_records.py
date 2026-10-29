@@ -1,11 +1,19 @@
 from __future__ import annotations
 
-import json
-import sqlite3
 from collections import Counter
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
+from itertools import count
 from typing import Any
+
+import psycopg
+from psycopg import sql
+from psycopg.rows import dict_row
+
+from off_storage import ORDINAL_COLUMN, TABLE as OFF_TABLE
+
+_FETCH_SIZE = 5_000
+_cursor_numbers = count()
 
 
 @dataclass(frozen=True)
@@ -21,22 +29,31 @@ class RawRow:
 Cleaner = Callable[[RawRow], "dict[str, Any] | None"]
 
 
-def iter_raw_rows(
-    sqlite: sqlite3.Connection,
-    source: str,
-    path_suffix: str = "",
-    text_filters: tuple[str, ...] = (),
-) -> Iterator[RawRow]:
-    artifact_id = _latest_artifact_id(sqlite, source, path_suffix)
+def iter_raw_rows(postgres: psycopg.Connection, source: str, path_suffix: str = "") -> Iterator[RawRow]:
+    artifact_id = latest_artifact_id(postgres, source, path_suffix)
     if artifact_id is None:
         return
-    parameters = [artifact_id, *(f"%{fragment}%" for fragment in text_filters)]
-    for ordinal, payload_json in sqlite.execute(_records_query(text_filters), parameters):
-        yield RawRow(artifact_id, ordinal, json.loads(payload_json))
+    query = sql.SQL(
+        "SELECT record_ordinal, payload_json FROM raw_records WHERE artifact_id = %s ORDER BY record_ordinal"
+    )
+    for ordinal, payload in _stream(postgres, query, (artifact_id,)):
+        yield RawRow(artifact_id, ordinal, payload)
 
 
-def iter_payloads(sqlite: sqlite3.Connection, source: str, path_suffix: str) -> Iterator[dict[str, Any]]:
-    return (row.payload for row in iter_raw_rows(sqlite, source, path_suffix))
+def iter_off_rows(postgres: psycopg.Connection, source: str, countries: tuple[str, ...]) -> Iterator[RawRow]:
+    artifact_id = latest_artifact_id(postgres, source)
+    if artifact_id is None:
+        return
+    query = sql.SQL("SELECT * FROM {} WHERE countries_tags ILIKE ANY(%s) ORDER BY {}").format(
+        sql.Identifier(OFF_TABLE), sql.Identifier(ORDINAL_COLUMN)
+    )
+    patterns = [f"%{country}%" for country in countries]
+    for row in _stream(postgres, query, (patterns,), dict_row):
+        yield RawRow(artifact_id, row.pop(ORDINAL_COLUMN), row)
+
+
+def iter_payloads(postgres: psycopg.Connection, source: str, path_suffix: str) -> Iterator[dict[str, Any]]:
+    return (row.payload for row in iter_raw_rows(postgres, source, path_suffix))
 
 
 def clean_rows(rows: Iterable[RawRow], cleaner: Cleaner, stats: Counter) -> Iterator[dict[str, Any]]:
@@ -50,17 +67,11 @@ def clean_rows(rows: Iterable[RawRow], cleaner: Cleaner, stats: Counter) -> Iter
             yield document
 
 
-def _outcome(document: dict[str, Any] | None, seen: set[str]) -> str:
-    if not document:
-        return "rejetes"
-    return "doublons" if document["_id"] in seen else "conserves"
-
-
-def _latest_artifact_id(sqlite: sqlite3.Connection, source: str, path_suffix: str) -> int | None:
-    row = sqlite.execute(
+def latest_artifact_id(postgres: psycopg.Connection, source: str, path_suffix: str = "") -> int | None:
+    row = postgres.execute(
         """
         SELECT artifact_id FROM raw_artifacts
-        WHERE source = ? AND relative_path LIKE ?
+        WHERE source = %s AND relative_path LIKE %s
         ORDER BY artifact_id DESC LIMIT 1
         """,
         (source, f"%{path_suffix}"),
@@ -68,8 +79,16 @@ def _latest_artifact_id(sqlite: sqlite3.Connection, source: str, path_suffix: st
     return None if row is None else row[0]
 
 
-def _records_query(text_filters: tuple[str, ...]) -> str:
-    query = "SELECT record_ordinal, payload_json FROM raw_records WHERE artifact_id = ?"
-    if not text_filters:
-        return query
-    return query + " AND (" + " OR ".join("payload_json LIKE ?" for _ in text_filters) + ")"
+def _outcome(document: dict[str, Any] | None, seen: set[str]) -> str:
+    if not document:
+        return "rejetes"
+    return "doublons" if document["_id"] in seen else "conserves"
+
+
+def _stream(
+    postgres: psycopg.Connection, query: sql.Composable, parameters: tuple, row_factory: Any = None
+) -> Iterator[Any]:
+    with postgres.cursor(name=f"raw_rows_{next(_cursor_numbers)}", row_factory=row_factory) as cursor:
+        cursor.itersize = _FETCH_SIZE
+        cursor.execute(query, parameters)
+        yield from cursor

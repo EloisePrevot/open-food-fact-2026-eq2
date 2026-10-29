@@ -5,9 +5,9 @@ FROM eclipse-temurin:25-jdk AS build
 WORKDIR /app
 
 # Warm the Gradle cache with just the build scripts first for better layer caching.
-COPY gradlew ./
-COPY gradle ./gradle
-COPY settings.gradle build.gradle gradle.properties ./
+COPY backend/gradlew ./
+COPY backend/gradle ./gradle
+COPY backend/settings.gradle backend/build.gradle backend/gradle.properties ./
 # Strip any CRLF line endings (e.g. from Windows checkouts) so /bin/sh can run the script.
 RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew && ./gradlew --no-daemon dependencies || true
 

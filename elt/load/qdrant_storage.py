@@ -251,7 +251,7 @@ def load_source(
     limit: int | None,
     skip_up_to_date: bool = False,
 ) -> dict[str, int]:
-    state = requested_state(connections.sqlite, source.raw_source, limit, EMBEDDING_MODEL)
+    state = requested_state(connections.postgres, source.raw_source, limit, EMBEDDING_MODEL)
     if skip_up_to_date and is_up_to_date(store.load_state(source.kind, source.label), state):
         print(f"Qdrant : {source.label} déjà à jour, ignoré")
         return {"dejaAJour": 1}
@@ -268,7 +268,7 @@ def _load(
 ) -> dict[str, int]:
     print(f"Qdrant : {source.label}...")
     stats: Counter = Counter()
-    documents = capped(source.documents(connections.sqlite, stats), limit)
+    documents = capped(source.documents(connections.postgres, stats), limit)
     stats.update(store.upsert(source.kind, map(source.to_point, documents)))
     return dict(stats)
 

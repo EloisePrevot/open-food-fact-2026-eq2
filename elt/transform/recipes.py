@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sqlite3
+import psycopg
 from collections import Counter
 from collections.abc import Iterator
 from typing import Any
@@ -25,8 +25,8 @@ _DIET_FIELDS = {
 }
 
 
-def recipe_documents(sqlite: sqlite3.Connection, stats: Counter) -> Iterator[dict[str, Any]]:
-    rows = iter_raw_rows(sqlite, KAGGLE_SOURCE, "recipes_extended.json")
+def recipe_documents(postgres: psycopg.Connection, stats: Counter) -> Iterator[dict[str, Any]]:
+    rows = iter_raw_rows(postgres, KAGGLE_SOURCE, "recipes_extended.json")
     return clean_rows(rows, clean_recipe, stats)
 
 

@@ -111,15 +111,18 @@ L’ELT maintient deux collections, séparées selon leur usage :
 
 Qdrant ne garde que l’identifiant et les champs filtrés; le document complet
 vit dans MongoDB sous le même identifiant (`recipe:…`, `cnf:…`, `off:…`).
-SQLite contient toutes les données brutes, sans filtre. Les règles de nettoyage
-(`elt/transform/recipes.py`, `cnf_foods.py`, `off_products.py`) lisent SQLite
+PostgreSQL contient toutes les données brutes, sans filtre : CNF et Kaggle dans
+`raw_records` (une ligne JSONB par enregistrement), Open Food Facts complet dans
+la table typée `off_products` (une colonne par champ du TSV). `raw_artifacts`
+garde le hash SHA-256 de chaque fichier importé. Les règles de nettoyage
+(`elt/transform/recipes.py`, `cnf_foods.py`, `off_products.py`) lisent PostgreSQL
 et produisent le document MongoDB; Qdrant en indexe une projection minimale
 (`elt/transform/qdrant_points.py`). Seuls les produits OFF étiquetés Canada,
-États-Unis ou Mexique sont conservés. Le fichier OFF est attendu à
+États-Unis ou Mexique sont conservés dans MongoDB et Qdrant. Le fichier OFF est attendu à
 `elt/raw/off.csv`; pour un autre emplacement, définissez `ELT_OFF_FILE`.
 
 Chargez d’abord les sources brutes, puis construisez MongoDB et Qdrant à partir
-de SQLite (l’ordre entre les deux n’importe pas) :
+de PostgreSQL (l’ordre entre les deux n’importe pas) :
 
 ```sh
 uv run --project elt python -m elt.load --load-raw all
@@ -141,11 +144,11 @@ ligne du pipeline apparaît dans les logs du backend préfixée par
 - `ELT_AU_DEMARRAGE` : `true` pour lancer le pipeline au démarrage (`false` par
   défaut hors Docker);
 - `ELT_LIMITE` : documents maximum par source pour MongoDB et Qdrant (`0` =
-  aucune limite). L’extraction vers SQLite est toujours complète.
+  aucune limite). L’extraction vers PostgreSQL est toujours complète.
 
 Le pipeline ne refait pas un travail déjà fait :
 
-- l’extraction ignore un fichier déjà présent dans SQLite avec le même contenu
+- l’extraction ignore un fichier déjà présent dans PostgreSQL avec le même contenu
   (hash SHA-256); seul le calcul du hash de `off.csv` prend une à deux minutes;
 - MongoDB et Qdrant sont lancés avec `--skip-up-to-date` : une source est
   ignorée si elle a déjà été chargée à partir des mêmes fichiers bruts, des
@@ -214,7 +217,7 @@ dans la Release GitHub `snapshots` du dépôt : `recipes.snapshot`,
 2. Qdrant restaure les collections absentes de son volume;
 3. `mongo-restore` restaure le dump si la base est vide;
 4. le backend démarre; la recherche fonctionne tout de suite;
-5. le pipeline en arrière-plan extrait les sources vers SQLite (environ une
+5. le pipeline en arrière-plan extrait les sources vers PostgreSQL (environ une
    heure la première fois, à cause des 13 Go de `off.csv`), puis ignore
    MongoDB et Qdrant, déjà à jour.
 

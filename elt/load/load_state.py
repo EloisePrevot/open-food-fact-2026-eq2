@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-import sqlite3
+import psycopg
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,17 +27,17 @@ class LoadState:
         return cls(data["version"], data.get("limite"))
 
 
-def requested_state(sqlite: sqlite3.Connection, raw_source: str, limit: int | None, *extras: str) -> LoadState:
-    return LoadState(source_version(sqlite, raw_source, *extras), limit)
+def requested_state(postgres: psycopg.Connection, raw_source: str, limit: int | None, *extras: str) -> LoadState:
+    return LoadState(source_version(postgres, raw_source, *extras), limit)
 
 
 def is_up_to_date(loaded: LoadState | None, requested: LoadState) -> bool:
     return loaded is not None and loaded.covers(requested)
 
 
-def source_version(sqlite: sqlite3.Connection, raw_source: str, *extras: str) -> str:
+def source_version(postgres: psycopg.Connection, raw_source: str, *extras: str) -> str:
     digest = hashlib.sha256(_rules_fingerprint().encode())
-    for part in (*extras, *_latest_artifacts(sqlite, raw_source)):
+    for part in (*extras, *_latest_artifacts(postgres, raw_source)):
         digest.update(f"{part}\n".encode())
     return digest.hexdigest()
 
@@ -48,11 +48,11 @@ def _limit_covers(loaded: int | None, requested: int | None) -> bool:
     return requested is not None and loaded >= requested
 
 
-def _latest_artifacts(sqlite: sqlite3.Connection, raw_source: str) -> list[str]:
-    rows = sqlite.execute(
+def _latest_artifacts(postgres: psycopg.Connection, raw_source: str) -> list[str]:
+    rows = postgres.execute(
         """
         SELECT relative_path, sha256 FROM raw_artifacts AS artifact
-        WHERE source = ? AND artifact_id = (
+        WHERE source = %s AND artifact_id = (
             SELECT MAX(artifact_id) FROM raw_artifacts
             WHERE source = artifact.source AND relative_path = artifact.relative_path
         )

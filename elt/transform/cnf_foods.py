@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sqlite3
+import psycopg
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
@@ -28,9 +28,9 @@ class CnfLookups:
     yields: PerFood
 
 
-def cnf_food_documents(sqlite: sqlite3.Connection, stats: Counter) -> Iterator[dict[str, Any]]:
-    lookups = load_lookups(sqlite)
-    rows = iter_raw_rows(sqlite, CNF_SOURCE, "FOOD NAME.csv")
+def cnf_food_documents(postgres: psycopg.Connection, stats: Counter) -> Iterator[dict[str, Any]]:
+    lookups = load_lookups(postgres)
+    rows = iter_raw_rows(postgres, CNF_SOURCE, "FOOD NAME.csv")
     return clean_rows(rows, partial(clean_cnf_food, lookups=lookups), stats)
 
 
@@ -73,9 +73,9 @@ def clean_cnf_food(row: RawRow, lookups: CnfLookups) -> dict[str, Any] | None:
     }
 
 
-def load_lookups(sqlite: sqlite3.Connection) -> CnfLookups:
+def load_lookups(postgres: psycopg.Connection) -> CnfLookups:
     def table(name: str) -> Iterator[dict[str, Any]]:
-        return iter_payloads(sqlite, CNF_SOURCE, f"{name}.csv")
+        return iter_payloads(postgres, CNF_SOURCE, f"{name}.csv")
 
     return CnfLookups(
         groups=index_by(table("FOOD GROUP"), "FoodGroupID"),

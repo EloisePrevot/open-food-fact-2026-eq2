@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import sqlite3
+import psycopg
 from collections import Counter
 from collections.abc import Iterator
 from typing import Any
 
 from extract.extract import OFF_SOURCE
 from transform.ingredient_identity import ingredient_keys
-from transform.raw_records import RawRow, clean_rows, iter_raw_rows
+from transform.raw_records import RawRow, clean_rows, iter_off_rows
 from transform.values import grade, optional_text, split_tags, strip_language, text, to_float, to_int
 
 SOURCE = "off"
@@ -15,8 +15,8 @@ NORTH_AMERICA_COUNTRIES = ("canada", "united-states", "mexico")
 _NUTRIMENT_SUFFIX = "_100g"
 
 
-def off_product_documents(sqlite: sqlite3.Connection, stats: Counter) -> Iterator[dict[str, Any]]:
-    rows = iter_raw_rows(sqlite, OFF_SOURCE, text_filters=NORTH_AMERICA_COUNTRIES)
+def off_product_documents(postgres: psycopg.Connection, stats: Counter) -> Iterator[dict[str, Any]]:
+    rows = iter_off_rows(postgres, OFF_SOURCE, NORTH_AMERICA_COUNTRIES)
     return clean_rows(rows, clean_off_product, stats)
 
 

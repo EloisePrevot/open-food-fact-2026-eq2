@@ -6,6 +6,9 @@ On optimise donc le chargement pour la vitesse :
 * tables ``UNLOGGED`` : pas de journal WAL, parfait pour des données rejouables ;
 * ``COPY ... FROM STDIN`` au lieu de ``INSERT``, bien plus rapide en masse ;
 * index secondaires créés une seule fois, après le chargement.
+
+CNF et Kaggle vont dans ``raw_records`` (JSONB); Open Food Facts va dans sa
+propre table typée ``off_products`` (voir ``off_storage``).
 """
 
 from __future__ import annotations
@@ -17,7 +20,9 @@ from datetime import UTC, datetime
 
 import psycopg
 
-from elt.raw_models import RawArtifact, RawRecord
+from extract.extract import OFF_SOURCE
+from off_storage import replace_off_products
+from raw_models import RawArtifact, RawRecord
 
 
 class RawDataStore:
@@ -76,48 +81,57 @@ class RawDataStore:
         )
         self._connection.commit()
 
-    def ingest(self, artifact: RawArtifact, records: Iterable[RawRecord]) -> int:
+    def ingest(self, artifact: RawArtifact, records: Iterable[RawRecord]) -> int | None:
         """Enregistre un artefact une seule fois par contenu et chemin source."""
         artifact_hash = self._hash_file(artifact)
 
         with self._connection.transaction():
-            existing_artifact = self._connection.execute(
-                """
-                SELECT artifact_id
-                FROM raw_artifacts
-                WHERE source = %s AND relative_path = %s AND sha256 = %s
-                """,
-                (artifact.source, artifact.relative_path, artifact_hash),
-            ).fetchone()
-
-            if existing_artifact is not None:
-                return 0
-
-            artifact_id = self._connection.execute(
-                """
-                INSERT INTO raw_artifacts (
-                    source, relative_path, media_type, encoding, sha256, imported_at
-                ) VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING artifact_id
-                """,
-                (
-                    artifact.source,
-                    artifact.relative_path,
-                    artifact.media_type,
-                    artifact.encoding,
-                    artifact_hash,
-                    datetime.now(UTC),
-                ),
-            ).fetchone()[0]
-
-            record_count = self._copy_records(artifact_id, records)
-
+            if self._artifact_exists(artifact, artifact_hash):
+                return None
+            artifact_id = self._insert_artifact(artifact, artifact_hash)
+            record_count = self._write_records(artifact, artifact_id, records)
             self._connection.execute(
                 "UPDATE raw_artifacts SET record_count = %s WHERE artifact_id = %s",
                 (record_count, artifact_id),
             )
 
         return record_count
+
+    def _artifact_exists(self, artifact: RawArtifact, artifact_hash: str) -> bool:
+        existing_artifact = self._connection.execute(
+            """
+            SELECT artifact_id
+            FROM raw_artifacts
+            WHERE source = %s AND relative_path = %s AND sha256 = %s
+            """,
+            (artifact.source, artifact.relative_path, artifact_hash),
+        ).fetchone()
+        return existing_artifact is not None
+
+    def _insert_artifact(self, artifact: RawArtifact, artifact_hash: str) -> int:
+        return self._connection.execute(
+            """
+            INSERT INTO raw_artifacts (
+                source, relative_path, media_type, encoding, sha256, imported_at
+            ) VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING artifact_id
+            """,
+            (
+                artifact.source,
+                artifact.relative_path,
+                artifact.media_type,
+                artifact.encoding,
+                artifact_hash,
+                datetime.now(UTC),
+            ),
+        ).fetchone()[0]
+
+    def _write_records(
+        self, artifact: RawArtifact, artifact_id: int, records: Iterable[RawRecord]
+    ) -> int:
+        if artifact.source == OFF_SOURCE:
+            return replace_off_products(self._connection, records)
+        return self._copy_records(artifact_id, records)
 
     def _copy_records(self, artifact_id: int, records: Iterable[RawRecord]) -> int:
         """Charge les enregistrements via COPY FROM STDIN (chemin le plus rapide)."""
@@ -154,13 +168,3 @@ class RawDataStore:
                 digest.update(chunk)
 
         return digest.hexdigest()
-
-    def _insert_batch(self, batch: list[tuple[int, int, str, str]]) -> None:
-        self._connection.executemany(
-            """
-            INSERT INTO raw_records (
-                artifact_id, record_ordinal, payload_json, payload_sha256
-            ) VALUES (?, ?, ?, ?)
-            """,
-            batch,
-        )

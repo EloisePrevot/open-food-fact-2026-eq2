@@ -4,9 +4,9 @@ import java.util.List;
 import java.util.stream.Stream;
 
 public enum EtlStep {
-  EXTRACT("extraction des sources vers SQLite", false, "--load-raw", "all"),
-  TRANSFORM("nettoyage de SQLite vers MongoDB", true, "--load-mongo", "--skip-up-to-date"),
-  LOAD("indexation de SQLite vers Qdrant", true, "--load-qdrant", "--skip-up-to-date");
+  EXTRACT("extraction des sources vers PostgreSQL", false, "--load-raw", "all"),
+  TRANSFORM("nettoyage de PostgreSQL vers MongoDB", true, "--load-mongo", "--skip-up-to-date"),
+  LOAD("indexation de PostgreSQL vers Qdrant", true, "--load-qdrant", "--skip-up-to-date");
 
   private static final String LIMIT_OPTION = "--limit";
 

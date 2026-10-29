@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-import json
-import sqlite3
+import os
 import unittest
 from collections import Counter
 from contextlib import closing
@@ -12,12 +11,16 @@ from unittest.mock import patch
 from uuid import uuid4
 
 import numpy as np
+import psycopg
+from psycopg import sql
+from psycopg.types.json import Jsonb
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
 
 from extract.extract import CNF_SOURCE, KAGGLE_SOURCE, OFF_SOURCE
 from load.load_state import LoadState
 from load.qdrant_storage import QdrantDataStore, run_qdrant_loads
+from off_storage import replace_off_products
 from raw_models import RawArtifact, RawRecord
 from raw_storage import RawDataStore
 from transform.cnf_foods import cnf_food_documents
@@ -52,9 +55,6 @@ OFF_RAW = {
     "fat_100g": "",
 }
 
-WINDOWS_PATH = r"cnf-fcen-csv\FOOD NAME.csv"
-
-
 class FixedEmbedding:
     @staticmethod
     def embed(texts):
@@ -62,20 +62,56 @@ class FixedEmbedding:
             yield np.ones(384, dtype=np.float32)
 
 
-def raw_database(records: dict[tuple[str, str], list[dict]]) -> sqlite3.Connection:
-    connection = sqlite3.connect(":memory:")
+POSTGRES_DSN = os.getenv(
+    "ELT_TEST_POSTGRES_DSN", "postgresql://postgres:postgres@localhost:5432/open_food_facts"
+)
+
+
+class TestConnection(psycopg.Connection):
+    schema = ""
+
+    def close(self) -> None:
+        if not self.closed:
+            self.rollback()
+            self.execute(sql.SQL("DROP SCHEMA {} CASCADE").format(sql.Identifier(self.schema)))
+            self.commit()
+        super().close()
+
+
+def raw_database(records: dict[tuple[str, str], list[dict]] | None = None) -> TestConnection:
+    connection = _connect_to_test_schema()
     RawDataStore(connection).initialize_schema()
-    for (source, path), payloads in records.items():
-        cursor = connection.execute(
-            "INSERT INTO raw_artifacts (source, relative_path, media_type, encoding, sha256, imported_at)"
-            " VALUES (?, ?, 'text/csv', 'utf-8', ?, 'now')",
-            (source, path, path),
-        )
-        connection.executemany(
-            "INSERT INTO raw_records VALUES (?, ?, ?, '')",
-            [(cursor.lastrowid, ordinal, json.dumps(payload)) for ordinal, payload in enumerate(payloads, 1)],
-        )
+    for (source, path), payloads in (records or {}).items():
+        _insert_artifact(connection, source, path, [RawRecord(o, p) for o, p in enumerate(payloads, 1)])
+    connection.commit()
     return connection
+
+
+def _connect_to_test_schema() -> TestConnection:
+    try:
+        connection = TestConnection.connect(POSTGRES_DSN, connect_timeout=3)
+    except psycopg.OperationalError as error:
+        raise unittest.SkipTest(f"PostgreSQL indisponible : {error}") from error
+    connection.schema = f"test_{uuid4().hex}"
+    connection.execute(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(connection.schema)))
+    connection.execute(sql.SQL("SET search_path TO {}").format(sql.Identifier(connection.schema)))
+    return connection
+
+
+def _insert_artifact(connection: psycopg.Connection, source: str, path: str, records: list[RawRecord]) -> None:
+    artifact_id = connection.execute(
+        "INSERT INTO raw_artifacts (source, relative_path, media_type, encoding, sha256, imported_at)"
+        " VALUES (%s, %s, 'text/csv', 'utf-8', %s, now()) RETURNING artifact_id",
+        (source, path, path),
+    ).fetchone()[0]
+    if source == OFF_SOURCE:
+        replace_off_products(connection, records)
+        return
+    with connection.cursor() as cursor:
+        cursor.executemany(
+            "INSERT INTO raw_records VALUES (%s, %s, %s, '')",
+            [(artifact_id, record.ordinal, Jsonb(record.payload)) for record in records],
+        )
 
 
 def row(payload: dict) -> RawRow:
@@ -100,7 +136,7 @@ class RecipeTests(unittest.TestCase):
         self.assertEqual(first["refBrut"], {"artifactId": 1, "ordinal": 7})
 
     def test_duplicate_recipes_keep_first_occurrence(self) -> None:
-        sqlite = raw_database(
+        postgres = raw_database(
             {
                 (KAGGLE_SOURCE, "kaggle-recipes/recipes_extended.json"): [
                     RECIPE_RAW,
@@ -110,8 +146,8 @@ class RecipeTests(unittest.TestCase):
         )
         stats: Counter = Counter()
 
-        with closing(sqlite):
-            documents = list(recipe_documents(sqlite, stats))
+        with closing(postgres):
+            documents = list(recipe_documents(postgres, stats))
 
         self.assertEqual([document["description"] for document in documents], ["Un souper rapide"])
         self.assertEqual(stats["doublons"], 1)
@@ -162,19 +198,19 @@ class OffProductTests(unittest.TestCase):
             },
         )
 
-    def test_documents_are_read_from_sqlite_and_filtered(self) -> None:
-        sqlite = raw_database(
+    def test_documents_are_read_from_postgres_and_filtered(self) -> None:
+        postgres = raw_database(
             {(OFF_SOURCE, "off.csv"): [OFF_RAW, {**OFF_RAW, "code": "9", "countries_tags": "en:france"}]}
         )
-        with closing(sqlite):
-            documents = list(off_product_documents(sqlite, Counter()))
+        with closing(postgres):
+            documents = list(off_product_documents(postgres, Counter()))
 
         self.assertEqual([document["_id"] for document in documents], ["off:001234"])
 
 
 class CnfFoodTests(unittest.TestCase):
     def test_food_is_joined_with_group_and_nutrients(self) -> None:
-        sqlite = raw_database(
+        postgres = raw_database(
             {
                 (CNF_SOURCE, "cnf/FOOD GROUP.csv"): [
                     {"FoodGroupID": "11", "FoodGroupName": "Vegetables", "FoodGroupNameF": "Légumes"}
@@ -193,8 +229,8 @@ class CnfFoodTests(unittest.TestCase):
             }
         )
 
-        with closing(sqlite):
-            [food] = list(cnf_food_documents(sqlite, Counter()))
+        with closing(postgres):
+            [food] = list(cnf_food_documents(postgres, Counter()))
 
         self.assertEqual(food["_id"], "cnf:42")
         self.assertIs(food["produitDeBase"], True)
@@ -232,16 +268,16 @@ class QdrantTests(unittest.TestCase):
         self.assertEqual(len(self.store.search_recipes("souper", recipe_type="main").points), 1)
         self.assertEqual(len(self.store.search_recipes("souper", recipe_type="dessert").points), 0)
 
-    def test_qdrant_is_fed_from_sqlite(self) -> None:
-        sqlite = raw_database(
+    def test_qdrant_is_fed_from_postgres(self) -> None:
+        postgres = raw_database(
             {
                 (KAGGLE_SOURCE, "kaggle-recipes/recipes_extended.json"): [RECIPE_RAW],
                 (OFF_SOURCE, "off.csv"): [OFF_RAW],
             }
         )
-        connections = SimpleNamespace(sqlite=sqlite, qdrant=self.client)
+        connections = SimpleNamespace(postgres=postgres, qdrant=self.client)
 
-        with closing(sqlite), patch("load.qdrant_storage.TextEmbedding", return_value=FixedEmbedding()):
+        with closing(postgres), patch("load.qdrant_storage.TextEmbedding", return_value=FixedEmbedding()):
             summary = run_qdrant_loads(connections, limit=None)
 
         self.assertEqual(summary["recettes"]["vectorises"], 1)
@@ -313,9 +349,9 @@ class QdrantTests(unittest.TestCase):
         )
 
     def load_recipes(self, limit: int | None, skip_up_to_date: bool = False) -> dict:
-        sqlite = raw_database({(KAGGLE_SOURCE, "kaggle-recipes/recipes_extended.json"): [RECIPE_RAW]})
-        connections = SimpleNamespace(sqlite=sqlite, qdrant=self.client)
-        with closing(sqlite), patch("load.qdrant_storage.TextEmbedding", return_value=FixedEmbedding()):
+        postgres = raw_database({(KAGGLE_SOURCE, "kaggle-recipes/recipes_extended.json"): [RECIPE_RAW]})
+        connections = SimpleNamespace(postgres=postgres, qdrant=self.client)
+        with closing(postgres), patch("load.qdrant_storage.TextEmbedding", return_value=FixedEmbedding()):
             return run_qdrant_loads(connections, limit=limit, skip_up_to_date=skip_up_to_date)
 
 
@@ -332,19 +368,10 @@ class LoadStateTests(unittest.TestCase):
 
 
 class RawDataStoreTests(unittest.TestCase):
-    def test_windows_paths_are_normalized(self) -> None:
-        with closing(raw_database({(CNF_SOURCE, WINDOWS_PATH): []})) as sqlite:
-            RawDataStore(sqlite).initialize_schema()
-
-            paths = [path for (path,) in sqlite.execute("SELECT relative_path FROM raw_artifacts")]
-
-        self.assertEqual(paths, ["cnf-fcen-csv/FOOD NAME.csv"])
-
     def test_same_file_is_not_ingested_twice(self) -> None:
-        with TemporaryDirectory() as directory, closing(sqlite3.connect(":memory:")) as sqlite:
+        with TemporaryDirectory() as directory, closing(raw_database()) as postgres:
             artifact = self.artifact(Path(directory))
-            store = RawDataStore(sqlite)
-            store.initialize_schema()
+            store = RawDataStore(postgres)
             store.ingest(artifact, [RawRecord(1, {"a": 1})])
 
             self.assertIsNone(store.ingest(artifact, [RawRecord(1, {"a": 1})]))

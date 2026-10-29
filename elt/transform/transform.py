@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import sqlite3
+import psycopg
 from collections import Counter
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -13,7 +13,7 @@ from transform.qdrant_points import product_point, recipe_point
 RECIPE = "recipe"
 PRODUCT = "product"
 
-Documents = Callable[[sqlite3.Connection, Counter], Iterator[dict[str, Any]]]
+Documents = Callable[[psycopg.Connection, Counter], Iterator[dict[str, Any]]]
 
 
 @dataclass(frozen=True)

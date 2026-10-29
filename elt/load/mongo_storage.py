@@ -78,7 +78,7 @@ def load_source(
     loaded_at: str,
     skip_up_to_date: bool = False,
 ) -> dict[str, int]:
-    state = requested_state(connections.sqlite, source.raw_source, limit)
+    state = requested_state(connections.postgres, source.raw_source, limit)
     if skip_up_to_date and is_up_to_date(store.load_state(source.label), state):
         print(f"MongoDB : {source.label} déjà à jour, ignoré")
         return {"dejaAJour": 1}
@@ -97,7 +97,7 @@ def _load(
     print(f"MongoDB : {source.label}...")
     collection = COLLECTIONS[source.kind]
     stats: Counter = Counter()
-    documents = capped(source.documents(connections.sqlite, stats), limit)
+    documents = capped(source.documents(connections.postgres, stats), limit)
     stats["charges"] = store.upsert(collection, documents, loaded_at)
     stats["supprimes"] = 0 if limit else store.purge_stale(collection, source.source, loaded_at)
     stats["total"] = store.count(collection, source.source)

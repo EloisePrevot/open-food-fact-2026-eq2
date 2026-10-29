@@ -13,14 +13,24 @@ import java.sql.SQLException;
 import java.util.Optional;
 
 public class PostgresRawRecordRepository implements RawRecordRepository {
-  private final PersistenceClients persistenceClients;
 
-private static final String FIND_BY_REFERENCE =
+  private static final String FIND_ARTIFACT =
       """
-      SELECT artifacts.source, artifacts.imported_at, records.payload_json
-      FROM raw_records records
-      JOIN raw_artifacts artifacts ON artifacts.artifact_id = records.artifact_id
-      WHERE records.artifact_id = ? AND records.record_ordinal = ?
+      SELECT source, to_char(imported_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          AS imported_at
+      FROM raw_artifacts WHERE artifact_id = ?
+      """;
+
+  private static final String FIND_RECORD_PAYLOAD =
+      """
+      SELECT payload_json::text AS payload FROM raw_records
+      WHERE artifact_id = ? AND record_ordinal = ?
+      """;
+
+  private static final String FIND_OFF_PRODUCT_PAYLOAD =
+      """
+      SELECT (to_jsonb(product) - 'record_ordinal')::text AS payload FROM off_products product
+      WHERE record_ordinal = ?
       """;
 
   private static final String COUNT_LATEST_MAIN_FILE =
@@ -37,31 +47,10 @@ private static final String FIND_BY_REFERENCE =
   }
 
   @Override
-  public void save(RawRecord rawRecord) {
-    throw new UnsupportedOperationException("Not implemented");
-  }
-
-  @Override
-  public Optional<RawRecord> findById(String id) {
-    throw new UnsupportedOperationException("Not implemented");
-  }
-
-  @Override
-  public long countBySource(DataSource source) {
-    throw new UnsupportedOperationException("Not implemented");
-  }
-
-  Connection openConnection() throws SQLException {
-    return persistenceClients.openPostgresConnection();
-  }
-
-  @Override
   public Optional<RawRecord> findByReference(RawReference reference) {
-    try (Connection connection = persistenceClients.openSqliteConnection();
-        PreparedStatement statement = connection.prepareStatement(FIND_BY_REFERENCE)) {
-      statement.setLong(1, reference.artifactId());
-      statement.setLong(2, reference.ordinal());
-      return readRawRecord(statement, reference.identifiant());
+    try (Connection connection = persistenceClients.openPostgresConnection()) {
+      return findArtifact(connection, reference.artifactId())
+          .flatMap(artifact -> findRecord(connection, artifact, reference));
     } catch (SQLException exception) {
       throw new PersistenceException("Lecture du brut impossible", exception);
     }
@@ -69,7 +58,7 @@ private static final String FIND_BY_REFERENCE =
 
   @Override
   public long countBySource(DataSource source) {
-    try (Connection connection = persistenceClients.openSqliteConnection();
+    try (Connection connection = persistenceClients.openPostgresConnection();
         PreparedStatement statement = connection.prepareStatement(COUNT_LATEST_MAIN_FILE)) {
       statement.setString(1, source.rawName());
       statement.setString(2, "%" + source.mainFileSuffix());
@@ -79,18 +68,53 @@ private static final String FIND_BY_REFERENCE =
     }
   }
 
-  private Optional<RawRecord> readRawRecord(PreparedStatement statement, String identifiant)
+  private Optional<Artifact> findArtifact(Connection connection, long artifactId)
       throws SQLException {
-    try (ResultSet result = statement.executeQuery()) {
-      if (!result.next()) {
-        return Optional.empty();
+    try (PreparedStatement statement = connection.prepareStatement(FIND_ARTIFACT)) {
+      statement.setLong(1, artifactId);
+      try (ResultSet result = statement.executeQuery()) {
+        if (!result.next()) {
+          return Optional.empty();
+        }
+        return Optional.of(
+            new Artifact(
+                DataSource.fromRawName(result.getString("source")),
+                result.getString("imported_at")));
       }
-      return Optional.of(
-          new RawRecord(
-              identifiant,
-              DataSource.fromRawName(result.getString("source")),
-              result.getString("imported_at"),
-              result.getString("payload_json")));
+    }
+  }
+
+  private Optional<RawRecord> findRecord(
+      Connection connection, Artifact artifact, RawReference reference) {
+    try {
+      return findPayload(connection, artifact.source(), reference)
+          .map(
+              payload ->
+                  new RawRecord(
+                      reference.identifiant(), artifact.source(), artifact.importedAt(), payload));
+    } catch (SQLException exception) {
+      throw new PersistenceException("Lecture du brut impossible", exception);
+    }
+  }
+
+  private Optional<String> findPayload(
+      Connection connection, DataSource source, RawReference reference) throws SQLException {
+    if (source == DataSource.OPEN_FOOD_FACTS) {
+      return readPayload(connection, FIND_OFF_PRODUCT_PAYLOAD, reference.ordinal());
+    }
+    return readPayload(
+        connection, FIND_RECORD_PAYLOAD, reference.artifactId(), reference.ordinal());
+  }
+
+  private Optional<String> readPayload(Connection connection, String query, long... parameters)
+      throws SQLException {
+    try (PreparedStatement statement = connection.prepareStatement(query)) {
+      for (int index = 0; index < parameters.length; index++) {
+        statement.setLong(index + 1, parameters[index]);
+      }
+      try (ResultSet result = statement.executeQuery()) {
+        return result.next() ? Optional.of(result.getString("payload")) : Optional.empty();
+      }
     }
   }
 
@@ -99,4 +123,6 @@ private static final String FIND_BY_REFERENCE =
       return result.next() ? result.getLong("record_count") : 0;
     }
   }
+
+  private record Artifact(DataSource source, String importedAt) {}
 }
