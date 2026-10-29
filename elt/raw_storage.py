@@ -64,6 +64,16 @@ class RawDataStore:
                 ON raw_records (artifact_id, payload_sha256);
             """
         )
+        # Index par source : le chargement de la BD2/BD3 sélectionne une source
+        # (recettes, CNF, OFF) en lisant cet index plutôt qu'en balayant toute
+        # la table raw_artifacts. Les enregistrements d'un artefact sont ensuite
+        # lus via la clé primaire (artifact_id, record_ordinal), déjà indexée.
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS raw_artifacts_source_index
+                ON raw_artifacts (source);
+            """
+        )
         self._connection.commit()
 
     def ingest(self, artifact: RawArtifact, records: Iterable[RawRecord]) -> int:

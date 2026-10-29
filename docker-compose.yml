@@ -61,6 +61,8 @@ services:
       POSTGRES_DB: open_food_facts
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Fichiers sources en lecture seule pour le COPY côté serveur (ex. off.csv).
+      - ./elt/raw:/raw:ro
 
 volumes:
   qdrant_data:

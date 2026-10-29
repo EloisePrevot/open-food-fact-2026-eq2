@@ -8,8 +8,11 @@ from collections.abc import Sequence
 from elt.config import Settings
 from elt.connections import DatabaseConnections, open_postgres_connection
 from elt.extract import SUPPORTED_SOURCES, get_raw_artifacts
+from elt.off_storage import load_off_north_america
 from elt.raw_extractors import extractor_for
 from elt.raw_storage import RawDataStore
+
+OFF_SOURCE = "off"
 
 
 def open_load_connections(settings: Settings | None = None) -> DatabaseConnections:
@@ -43,6 +46,15 @@ def load_raw_sources(source_names: Sequence[str], settings: Settings | None = No
     return total_record_count
 
 
+def load_off_products(settings: Settings | None = None) -> int:
+    """Charge off.csv côté serveur et ne garde que les produits nord-américains."""
+    configured_settings = settings or Settings.from_environment()
+    off_csv_path = configured_settings.raw_directory / "off.csv"
+
+    with open_postgres_connection(configured_settings) as connection:
+        return load_off_north_america(connection, off_csv_path)
+
+
 def main() -> None:
     parser = ArgumentParser(description="Commandes du pipeline ELT Open Food Facts Québec.")
     parser.add_argument(
@@ -54,6 +66,14 @@ def main() -> None:
         "--load-raw",
         choices=(*SUPPORTED_SOURCES, "all"),
         help="charge les enregistrements bruts CNF et/ou Kaggle vers PostgreSQL",
+    )
+    parser.add_argument(
+        "--load-off",
+        action="store_true",
+        help=(
+            "charge off.csv via COPY côté serveur et ne garde que les produits "
+            "nord-américains (nécessite le volume ./elt/raw monté dans le conteneur)"
+        ),
     )
     arguments = parser.parse_args()
 
@@ -68,7 +88,12 @@ def main() -> None:
         print(f"{record_count} raw records loaded into PostgreSQL.")
         return
 
-    parser.error("Specify --check-connections or --load-raw.")
+    if arguments.load_off:
+        kept_count = load_off_products()
+        print(f"{kept_count} North American Open Food Facts products loaded into PostgreSQL.")
+        return
+
+    parser.error("Specify --check-connections, --load-raw or --load-off.")
 
 
 if __name__ == "__main__":
