@@ -76,6 +76,32 @@ class FillFrenchFieldsTests(unittest.TestCase):
 
         self.translate.assert_not_called()
 
+    def test_ingredient_names_are_translated_english_and_key_are_kept(self) -> None:
+        recipe = build_recipe(
+            ingredients=[{"nom": "ketchup", "cle": "ketchup", "texteOriginal": "3/4 cup ketchup"}]
+        )
+
+        [result] = fill_french_fields(RECIPE, [recipe])
+
+        ingredient = result["ingredients"][0]
+        self.assertEqual(ingredient["nom"], "fr:ketchup")
+        self.assertEqual(ingredient["nomEn"], "ketchup")
+        self.assertEqual(ingredient["cle"], "ketchup")
+        self.assertEqual(ingredient["texteOriginal"], "3/4 cup ketchup")
+
+    def test_repeated_ingredient_name_is_translated_once(self) -> None:
+        shared = {"nom": "salt", "cle": "salt", "texteOriginal": "1 pinch salt"}
+        batch = [
+            build_recipe(_id="recipe:1", nom="", description="", ingredients=[dict(shared)]),
+            build_recipe(_id="recipe:2", nom="", description="", ingredients=[dict(shared)]),
+        ]
+
+        fill_french_fields(RECIPE, batch)
+
+        # Un seul appel (ingrédients), et "salt" n'y figure qu'une fois (dédup).
+        self.translate.assert_called_once()
+        self.assertEqual(self.translate.call_args.args[0], ["salt"])
+
     def test_unknown_kind_returns_documents_unchanged(self) -> None:
         documents = [{"_id": "x", "source": "off"}]
 

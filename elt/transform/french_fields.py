@@ -32,26 +32,84 @@ _TRANSLATABLE_FIELDS: dict[str, tuple[tuple[str, str, str], ...]] = {
 
 
 def fill_french_fields(kind: str, documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Traduit en un seul passage tous les champs d'un lot de documents.
+    """Traduit en un seul passage les champs français d'un lot de documents.
 
-    Les produits de base (CNF) portent déjà un nom français issu de la source :
-    on ne les retraduit pas. On ne traduit que ce qui n'a pas d'équivalent
-    français, puis on réécrit chaque document avec ses champs remplis.
+    Pour les recettes : le titre et la description (champs scalaires) ainsi que
+    le nom de chaque ingrédient. Les noms d'ingrédients sont dédupliqués sur le
+    lot avant traduction (ils se répètent beaucoup d'une recette à l'autre), puis
+    réécrits. Le nom anglais est conservé et la clé d'appariement ne change pas.
     """
     fields = _TRANSLATABLE_FIELDS.get(kind, ())
-    if not fields:
+    if not fields and kind != RECIPE:
         return documents
 
+    documents = _translate_scalar_fields(documents, fields)
+    if kind == RECIPE:
+        documents = _translate_ingredients(documents)
+    return documents
+
+
+def _translate_scalar_fields(
+    documents: list[dict[str, Any]], fields: tuple[tuple[str, str, str], ...]
+) -> list[dict[str, Any]]:
+    if not fields:
+        return documents
     requests = _collect_requests(documents, fields)
     if not requests:
         return documents
-
     translations = translate_to_french([text for _, text in requests])
     by_position = _group_by_document(requests, translations)
     return [
         _apply(document, index, fields, by_position)
         for index, document in enumerate(documents)
     ]
+
+
+def _translate_ingredients(documents: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Traduit le nom des ingrédients, en dédupliquant sur le lot.
+
+    Chaque ingrédient devient ``{nom: <français>, nomEn: <anglais>, cle,
+    texteOriginal}``. La clé d'appariement (``cle``) reste inchangée pour ne pas
+    perturber l'appariement par embeddings, qui reste la source de vérité de
+    @POST /apparier_ingredient.
+    """
+    unique_names = sorted(
+        {
+            ingredient["nom"]
+            for document in documents
+            for ingredient in document.get("ingredients", [])
+            if _translatable_name(ingredient)
+        }
+    )
+    if not unique_names:
+        return documents
+
+    french_by_name = dict(zip(unique_names, translate_to_french(unique_names)))
+    for document in documents:
+        ingredients = document.get("ingredients")
+        if isinstance(ingredients, list):
+            document["ingredients"] = [
+                _french_ingredient(ingredient, french_by_name) for ingredient in ingredients
+            ]
+    return documents
+
+
+def _translatable_name(ingredient: Any) -> bool:
+    return (
+        isinstance(ingredient, dict)
+        and isinstance(ingredient.get("nom"), str)
+        and bool(ingredient["nom"].strip())
+    )
+
+
+def _french_ingredient(
+    ingredient: dict[str, Any], french_by_name: dict[str, str]
+) -> dict[str, Any]:
+    original = ingredient.get("nom")
+    french = french_by_name.get(original) if isinstance(original, str) else None
+    if french is None:
+        return ingredient
+    return {**ingredient, "nom": french, "nomEn": original}
 
 
 def _collect_requests(
