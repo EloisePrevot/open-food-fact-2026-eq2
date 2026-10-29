@@ -17,6 +17,9 @@ services:
       POSTGRES_DSN: postgresql://postgres:postgres@postgres:5432/open_food_facts
       ELT_AU_DEMARRAGE: "true"
       ELT_LIMITE: "5000"
+      # Cibles d'échantillonnage stratifié par source (0 = aucune limite).
+      ELT_LIMITE_PRODUITS: "50000"
+      ELT_LIMITE_RECETTES: "10000"
       ELT_RAW_DIRECTORY: /app/elt/raw
       QDRANT_URL: http://qdrant:6333
     volumes:

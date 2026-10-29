@@ -8,6 +8,7 @@ from collections.abc import Iterator
 
 import ijson
 
+from load.progress import ByteProgress
 from raw_models import RawArtifact, RawRecord
 
 
@@ -63,6 +64,9 @@ class TsvRecordExtractor(CsvRecordExtractor):
 
     QUOTE_NONE : OFF ne protège pas ses champs, un guillemet en début de champ
     est une donnée et ne doit pas avaler les lignes suivantes.
+
+    Affiche la progression en pourcentage à partir de la position d'octet dans le
+    fichier (le nombre total de lignes est inconnu avant lecture complète).
     """
 
     delimiter = "\t"
@@ -70,7 +74,29 @@ class TsvRecordExtractor(CsvRecordExtractor):
 
     def extract(self, artifact: RawArtifact) -> Iterator[RawRecord]:
         csv.field_size_limit(10_000_000)
-        yield from super().extract(artifact)
+        total_bytes = artifact.path.stat().st_size
+        progress = ByteProgress("lecture OFF", total_bytes)
+
+        with artifact.path.open("r", encoding=artifact.encoding, newline="") as source_file:
+            reader = csv.reader(source_file, delimiter=self.delimiter, quoting=self.quoting)
+            raw_headers = next(reader, None)
+            if raw_headers is None:
+                progress.done(0)
+                return
+
+            headers = self._normalize_headers(raw_headers)
+            count = 0
+            for ordinal, values in enumerate(reader, start=1):
+                if not any(values):
+                    continue
+                if len(values) != len(headers):
+                    raise ValueError(
+                        f"Invalid record width in {artifact.relative_path} at record {ordinal}."
+                    )
+                count += 1
+                progress.update(source_file.buffer.tell(), count)
+                yield RawRecord(ordinal=ordinal, payload=dict(zip(headers, values, strict=True)))
+            progress.done(count)
 
 
 class JsonArrayRecordExtractor(RawRecordExtractor):

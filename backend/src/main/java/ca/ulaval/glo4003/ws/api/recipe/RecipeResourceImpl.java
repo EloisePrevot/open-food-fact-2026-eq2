@@ -19,6 +19,11 @@ public class RecipeResourceImpl implements RecipeResource {
   }
 
   @Override
+  public Response getRecipe(String identifiant) {
+    return Response.ok(recipeService.getRecipe(identifiant)).build();
+  }
+
+  @Override
   public Response searchRecipes(RecipeSearchRequestDto request) {
     return Response.ok(recipeService.searchRecipes(request)).build();
   }

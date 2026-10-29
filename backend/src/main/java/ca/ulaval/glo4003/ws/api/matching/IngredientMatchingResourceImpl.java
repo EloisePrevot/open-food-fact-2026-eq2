@@ -19,6 +19,11 @@ public class IngredientMatchingResourceImpl implements IngredientMatchingResourc
   }
 
   @Override
+  public Response suggestBrands(String query, int limite) {
+    return Response.ok(ingredientMatchingService.suggestBrands(query, limite)).build();
+  }
+
+  @Override
   public Response findProductsContainingIngredient(ContainsRequestDto request) {
     return Response.ok(ingredientMatchingService.findProductsContainingIngredient(request)).build();
   }

@@ -1,6 +1,7 @@
 import { API_BASE_URL } from "@/shared/config/apiConfig"
 import { ensureSuccess } from "@/shared/utils/http"
 import type {
+  RecipeDetailDto,
   RecipeSearchRequestDto,
   RecipeSearchResponseDto,
   RecipeTypesDto,
@@ -8,8 +9,20 @@ import type {
 
 const RECIPE_SEARCH_ENDPOINT = `${API_BASE_URL}/recette`
 const RECIPE_TYPES_ENDPOINT = `${API_BASE_URL}/type`
+const recipeDetailEndpoint = (identifiant: string) =>
+  `${API_BASE_URL}/recette/${encodeURIComponent(identifiant)}`
 
 export const recipeRequests = {
+  detail: async (identifiant: string): Promise<RecipeDetailDto> => {
+    const response = await fetch(recipeDetailEndpoint(identifiant), {
+      headers: { Accept: "application/json" },
+    })
+
+    await ensureSuccess(response)
+
+    return (await response.json()) as RecipeDetailDto
+  },
+
   search: async (
     request: RecipeSearchRequestDto,
   ): Promise<RecipeSearchResponseDto> => {

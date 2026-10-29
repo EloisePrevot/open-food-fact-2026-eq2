@@ -19,3 +19,11 @@ export const useRecipeSearch = (request: RecipeSearchRequestDto) => {
     select: (data) => data.recettes,
   })
 }
+
+export const useRecipeDetail = (identifiant: string | undefined) => {
+  return useQuery({
+    enabled: identifiant !== undefined,
+    queryFn: () => recipeRequests.detail(identifiant as string),
+    queryKey: ["recipe", identifiant],
+  })
+}

@@ -10,6 +10,7 @@ from typing import Any
 from extract.extract import KAGGLE_SOURCE
 from transform.ingredient_identity import ingredient_key
 from transform.raw_records import RawRow, clean_rows, iter_raw_rows
+from transform.recipe_taxonomy import french_recipe_types
 from transform.values import json_list, optional_text, text, text_list, to_bool, to_int
 
 SOURCE = "kaggle"
@@ -46,7 +47,7 @@ def clean_recipe(row: RawRow) -> dict[str, Any] | None:
         "source": SOURCE,
         "nom": title,
         "description": text(raw.get("description")),
-        "type": recipe_types(raw, category),
+        "type": french_recipe_types(raw),
         "categorie": category,
         "sousCategorie": optional_text(raw.get("subcategory")),
         "nbIngredients": len(ingredients),
@@ -68,6 +69,7 @@ def clean_recipe(row: RawRow) -> dict[str, Any] | None:
         "profilDietetique": text_list(raw.get("dietary_profile")),
         "regime": {french: to_bool(raw.get(english)) for english, french in _DIET_FIELDS.items()},
         "refBrut": row.reference(),
+        "_chargeBrute": raw,
     }
 
 
@@ -83,13 +85,6 @@ def recipe_ingredients(raw: dict[str, Any]) -> list[dict[str, str]]:
                 {"nom": name, "cle": ingredient_key(name), "texteOriginal": original_text}
             )
     return ingredients
-
-
-def recipe_types(raw: dict[str, Any], category: str | None) -> list[str]:
-    courses = text_list(raw.get("course_list"))
-    if courses:
-        return courses
-    return [category] if category else []
 
 
 def recipe_id(

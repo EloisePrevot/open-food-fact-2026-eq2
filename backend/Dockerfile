@@ -35,6 +35,35 @@ ENV FASTEMBED_CACHE_PATH=/app/models \
     EMBEDDING_MODEL_DIRECTORY=/app/models
 RUN /app/elt/.venv/bin/python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')"
 
+# Offline English→French translation model, baked into the image so the ELT never
+# calls out at runtime (no network, no API key). Download happens at build time only.
+# An Argos ".argosmodel" is a zip holding a CTranslate2 model (in model/) and a
+# SentencePiece tokenizer; we flatten both into one directory and drop the Stanza
+# sentence splitter we do not use. See transform/translation.py.
+ENV TRANSLATION_MODEL_DIRECTORY=/app/models/translation/en-fr
+ADD https://argos-net.com/v1/translate-en_fr-1_9.argosmodel /tmp/en_fr.argosmodel
+RUN /app/elt/.venv/bin/python - <<'PY'
+import shutil, zipfile
+from pathlib import Path
+
+target = Path("/app/models/translation/en-fr")
+target.mkdir(parents=True, exist_ok=True)
+with zipfile.ZipFile("/tmp/en_fr.argosmodel") as archive:
+    archive.extractall("/tmp/en_fr")
+
+root = next(Path("/tmp/en_fr").iterdir())
+for item in (root / "model").iterdir():
+    shutil.copy2(item, target / item.name)
+shutil.copy2(root / "sentencepiece.model", target / "sentencepiece.model")
+
+required = {"model.bin", "sentencepiece.model"}
+missing = required - {entry.name for entry in target.iterdir()}
+if missing:
+    raise SystemExit(f"Modele de traduction incomplet, manquants: {missing}")
+print("Translation model ready:", sorted(entry.name for entry in target.iterdir()))
+PY
+RUN rm -rf /tmp/en_fr /tmp/en_fr.argosmodel
+
 COPY elt ./elt
 # The application plugin names the distribution after rootProject.name.
 COPY --from=build /app/build/install/equipe2-bd/ ./

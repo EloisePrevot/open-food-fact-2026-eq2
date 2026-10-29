@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Data pipeline for Open Food Facts Québec"
 requires-python = ">=3.11"
 dependencies = [
+  "ctranslate2==4.6.0",
+  "sentencepiece==0.2.1",
   "fastembed>=0.9.0",
   "ijson==3.4.0",
   "psycopg[binary]==3.3.5",

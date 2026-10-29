@@ -19,6 +19,7 @@ from qdrant_client.http import models
 
 from extract.extract import CNF_SOURCE, KAGGLE_SOURCE, OFF_SOURCE
 from load.load_state import LoadState
+from load.mongo_storage import _split_raw_payload
 from load.qdrant_storage import QdrantDataStore, run_qdrant_loads
 from off_storage import replace_off_products
 from raw_models import RawArtifact, RawRecord
@@ -38,7 +39,7 @@ RECIPE_RAW = {
     "ingredients": ["500 g chicken breast", "salt"],
     "ingredients_canonical": ["chicken breast", "salt"],
     "directions": ["Cook the chicken.", "Season to taste."],
-    "course_list": '["main"]',
+    "course_list": ["main"],
     "is_vegan": "False",
 }
 
@@ -126,7 +127,7 @@ class RecipeTests(unittest.TestCase):
         first = clean_recipe(row(RECIPE_RAW))
 
         self.assertEqual(first["_id"], clean_recipe(row(RECIPE_RAW))["_id"])
-        self.assertEqual(first["type"], ["main"])
+        self.assertEqual(first["type"], ["Plat principal"])
         self.assertEqual(first["nbIngredients"], 2)
         self.assertEqual(
             first["ingredients"][0],
@@ -265,7 +266,9 @@ class QdrantTests(unittest.TestCase):
     def test_recipe_search_filters_by_type(self) -> None:
         self.store.upsert(RECIPE, [recipe_point(clean_recipe(row(RECIPE_RAW)))])
 
-        self.assertEqual(len(self.store.search_recipes("souper", recipe_type="main").points), 1)
+        self.assertEqual(
+            len(self.store.search_recipes("souper", recipe_type="Plat principal").points), 1
+        )
         self.assertEqual(len(self.store.search_recipes("souper", recipe_type="dessert").points), 0)
 
     def test_qdrant_is_fed_from_postgres(self) -> None:
@@ -353,6 +356,28 @@ class QdrantTests(unittest.TestCase):
         connections = SimpleNamespace(postgres=postgres, qdrant=self.client)
         with closing(postgres), patch("load.qdrant_storage.TextEmbedding", return_value=FixedEmbedding()):
             return run_qdrant_loads(connections, limit=limit, skip_up_to_date=skip_up_to_date)
+
+
+class RawPayloadSplitTests(unittest.TestCase):
+    LOADED_AT = "2026-10-29T00:00:00+00:00"
+
+    def test_raw_payload_is_extracted_into_a_separate_raw_document(self) -> None:
+        document = clean_off_product(row(OFF_RAW))
+
+        served, raw = _split_raw_payload(document, self.LOADED_AT)
+
+        self.assertNotIn("_chargeBrute", served)
+        self.assertEqual(raw["_id"], "off:001234")
+        self.assertEqual(raw["identifiant"], "off:001234")
+        self.assertEqual(raw["source"], "off")
+        self.assertEqual(raw["dateIngestion"], self.LOADED_AT)
+        self.assertEqual(raw["chargeUtile"], OFF_RAW)
+
+    def test_document_without_raw_payload_yields_no_raw_document(self) -> None:
+        served, raw = _split_raw_payload({"_id": "x", "identifiant": "x", "source": "s"}, self.LOADED_AT)
+
+        self.assertIsNone(raw)
+        self.assertEqual(served["_id"], "x")
 
 
 class LoadStateTests(unittest.TestCase):

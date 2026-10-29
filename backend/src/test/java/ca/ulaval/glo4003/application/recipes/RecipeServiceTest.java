@@ -6,11 +6,24 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+
+import ca.ulaval.glo4003.application.matching.IngredientMatchingService;
+import ca.ulaval.glo4003.application.matching.ProductPreferences;
+import ca.ulaval.glo4003.application.matching.ScoredProductDocument;
+import ca.ulaval.glo4003.application.products.model.ProductDocument;
+import ca.ulaval.glo4003.application.recipes.model.RecipeDetailDocument;
+import ca.ulaval.glo4003.application.recipes.model.RecipeDetailDocument.RecipeIngredient;
 import ca.ulaval.glo4003.application.recipes.model.RecipeDocument;
 import ca.ulaval.glo4003.application.search.RecipeSearchRepository;
 import ca.ulaval.glo4003.application.search.TextEmbedder;
 import ca.ulaval.glo4003.application.search.model.ScoredRecipe;
 import ca.ulaval.glo4003.application.shared.InvalidRequestException;
+import ca.ulaval.glo4003.application.shared.NotFoundException;
+import ca.ulaval.glo4003.ws.api.recipe.dto.CookRequestDto;
+import ca.ulaval.glo4003.ws.api.recipe.dto.CookResponseDto;
+import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeDetailDto;
 import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeSearchRequestDto;
 import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeSearchResponseDto.RecipeSummaryDto;
 import java.util.List;
@@ -28,6 +41,7 @@ class RecipeServiceTest {
 
   private RecipeRepository recipeRepository;
   private RecipeSearchRepository recipeSearchRepository;
+  private IngredientMatchingService ingredientMatchingService;
   private TextEmbedder textEmbedder;
   private RecipeService recipeService;
 
@@ -35,8 +49,11 @@ class RecipeServiceTest {
   void setUp() {
     recipeRepository = mock(RecipeRepository.class);
     recipeSearchRepository = mock(RecipeSearchRepository.class);
+    ingredientMatchingService = mock(IngredientMatchingService.class);
     textEmbedder = mock(TextEmbedder.class);
-    recipeService = new RecipeService(recipeRepository, recipeSearchRepository, textEmbedder);
+    recipeService =
+        new RecipeService(
+            recipeRepository, recipeSearchRepository, ingredientMatchingService, textEmbedder);
   }
 
   @Test
@@ -77,9 +94,95 @@ class RecipeServiceTest {
   }
 
   @Test
+  void givenKnownIdentifier_whenGettingRecipe_thenDetailIsReturned() {
+    RecipeDetailDocument detail =
+        new RecipeDetailDocument(
+            "recipe:soup",
+            "Soup",
+            "A warm soup",
+            List.of("soup"),
+            List.of(new RecipeIngredient("carrot", "carrot", "2 carrots")),
+            List.of("Chop the carrots.", "Simmer."));
+    when(recipeRepository.findDetailById("recipe:soup")).thenReturn(Optional.of(detail));
+
+    RecipeDetailDto result = recipeService.getRecipe("recipe:soup");
+
+    assertThat(result.nom).isEqualTo("Soup");
+    assertThat(result.description).isEqualTo("A warm soup");
+    assertThat(result.etapes).containsExactly("Chop the carrots.", "Simmer.");
+    assertThat(result.ingredients).extracting(ingredient -> ingredient.cle).containsExactly("carrot");
+  }
+
+  @Test
+  void givenUnknownIdentifier_whenGettingRecipe_thenNotFoundIsThrown() {
+    when(recipeRepository.findDetailById("recipe:missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> recipeService.getRecipe("recipe:missing"))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
   void givenNonPositiveLimit_whenSearching_thenRequestIsRejected() {
     assertThatThrownBy(() -> recipeService.searchRecipes(request(null, null, 0)))
         .isInstanceOf(InvalidRequestException.class);
+  }
+
+  @Test
+  void givenRecipe_whenCooking_thenEachIngredientGetsFilteredRecommendations() {
+    RecipeDetailDocument detail =
+        new RecipeDetailDocument(
+            "recipe:soup",
+            "Soup",
+            "A warm soup",
+            List.of("soup"),
+            List.of(
+                new RecipeIngredient("carrot", "carrot", "2 carrots"),
+                new RecipeIngredient("salt", "salt", "a pinch of salt")),
+            List.of("Chop.", "Simmer."));
+    when(recipeRepository.findDetailById("recipe:soup")).thenReturn(Optional.of(detail));
+    ProductDocument carrotProduct =
+        new ProductDocument("off:carrot", "Carottes bio", false, "A", 1, List.of("Bonduelle"));
+    when(ingredientMatchingService.recommendProducts(
+            eq("carrot"), any(ProductPreferences.class), eq(Optional.empty()), eq(3)))
+        .thenReturn(List.of(new ScoredProductDocument(0.95, carrotProduct)));
+    when(ingredientMatchingService.recommendProducts(
+            eq("salt"), any(ProductPreferences.class), eq(Optional.empty()), eq(3)))
+        .thenReturn(List.of());
+
+    CookResponseDto response = recipeService.cook(cookRequest("recipe:soup", 3));
+
+    assertThat(response.nomRecette).isEqualTo("Soup");
+    assertThat(response.ingredients)
+        .extracting(recommendation -> recommendation.ingredientTexte)
+        .containsExactly("2 carrots");
+    assertThat(response.ingredients.get(0).produits)
+        .extracting(product -> product.nutriScore)
+        .containsExactly("A");
+    assertThat(response.ingredients.get(0).produits)
+        .extracting(product -> product.marque)
+        .containsExactly("Bonduelle");
+    assertThat(response.ingredientsSansCorrespondance).containsExactly("a pinch of salt");
+  }
+
+  @Test
+  void givenUnknownRecipe_whenCooking_thenNotFoundIsThrown() {
+    when(recipeRepository.findDetailById("recipe:missing")).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> recipeService.cook(cookRequest("recipe:missing", 3)))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void givenNonPositiveLimit_whenCooking_thenRequestIsRejected() {
+    assertThatThrownBy(() -> recipeService.cook(cookRequest("recipe:soup", 0)))
+        .isInstanceOf(InvalidRequestException.class);
+  }
+
+  private static CookRequestDto cookRequest(String recipeId, int limit) {
+    CookRequestDto request = new CookRequestDto();
+    request.identifiantRecette = recipeId;
+    request.limiteParIngredient = limit;
+    return request;
   }
 
   private static RecipeSearchRequestDto request(String type, String description, int limit) {

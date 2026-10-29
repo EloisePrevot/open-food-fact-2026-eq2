@@ -38,8 +38,8 @@ def clean_off_product(row: RawRow) -> dict[str, Any] | None:
         "produitDeBase": False,
         "codeBarres": code,
         "nomProduit": name,
-        "nomGenerique": generic_name or None,
-        "marque": ", ".join(brands) or None,
+        "nomGenerique": generic_name,
+        "marque": ", ".join(brands),
         "marques": brands,
         "categorie": main_category(raw, categories),
         "categories": categories,
@@ -61,6 +61,7 @@ def clean_off_product(row: RawRow) -> dict[str, Any] | None:
         "nutrimentsBase": "100 g",
         "cles": ingredient_keys(generic_name, name),
         "refBrut": row.reference(),
+        "_chargeBrute": raw,
     }
 
 
@@ -77,11 +78,11 @@ def product_name(raw: dict[str, Any]) -> str:
     )
 
 
-def main_category(raw: dict[str, Any], categories: list[str]) -> str | None:
+def main_category(raw: dict[str, Any], categories: list[str]) -> str:
     pnns_group = optional_text(raw.get("pnns_groups_1"))
-    if pnns_group and pnns_group.casefold() == "unknown":
-        pnns_group = None
-    fallback = categories[0] if categories else None
+    if pnns_group.casefold() == "unknown":
+        pnns_group = ""
+    fallback = categories[0] if categories else ""
     return optional_text(raw.get("main_category_en")) or pnns_group or fallback
 
 

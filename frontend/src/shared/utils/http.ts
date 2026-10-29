@@ -1,6 +1,16 @@
+export class HttpError extends Error {
+  readonly status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = "HttpError"
+    this.status = status
+  }
+}
+
 export const ensureSuccess = async (response: Response): Promise<void> => {
   if (!response.ok) {
-    throw new Error(await errorMessage(response))
+    throw new HttpError(response.status, await errorMessage(response))
   }
 }
 

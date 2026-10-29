@@ -12,9 +12,11 @@ import ca.ulaval.glo4003.infrastructure.etl.PythonEtlRunner;
 import ca.ulaval.glo4003.persistence.PersistenceClients;
 import ca.ulaval.glo4003.persistence.PersistenceConfiguration;
 import ca.ulaval.glo4003.persistence.mongo.MongoProductRepository;
-import ca.ulaval.glo4003.persistence.mongo.MongoRawReferenceRepository;
+import ca.ulaval.glo4003.persistence.mongo.MongoRawDataRepository;
+import ca.ulaval.glo4003.application.search.TextEmbedder;
 import ca.ulaval.glo4003.persistence.mongo.MongoRecipeRepository;
 import ca.ulaval.glo4003.persistence.postgres.PostgresRawRecordRepository;
+import ca.ulaval.glo4003.persistence.qdrant.QdrantIngredientSearchRepository;
 import ca.ulaval.glo4003.persistence.qdrant.QdrantRecipeSearchRepository;
 import ca.ulaval.glo4003.ws.api.data.DataResource;
 import ca.ulaval.glo4003.ws.api.data.DataResourceImpl;
@@ -55,8 +57,11 @@ public class ProjectDBMain {
     HeartbeatResource heartbeatResource = createHeartbeatResource();
     DataResource dataResource = createDataResource(persistenceClients);
     DocumentationResource documentationResource = createDocumentationResource();
-    RecipeResource recipeResource = createRecipeResource(persistenceClients);
-    IngredientMatchingResource ingredientMatchingResource = createIngredientMatchingResource();
+    TextEmbedder textEmbedder =
+        new OnnxTextEmbedder(EmbeddingConfiguration.fromEnvironment().modelDirectory());
+    RecipeResource recipeResource = createRecipeResource(persistenceClients, textEmbedder);
+    IngredientMatchingResource ingredientMatchingResource =
+        createIngredientMatchingResource(persistenceClients, textEmbedder);
 
     final AbstractBinder binder =
         new AbstractBinder() {
@@ -114,7 +119,7 @@ public class ProjectDBMain {
     return new DataResourceImpl(
         new DataService(
             new PostgresRawRecordRepository(persistenceClients),
-            new MongoRawReferenceRepository(persistenceClients),
+            new MongoRawDataRepository(persistenceClients),
             new MongoProductRepository(persistenceClients)));
   }
 
@@ -123,18 +128,30 @@ public class ProjectDBMain {
     return new DocumentationResourceImpl(new DocumentationService());
   }
 
-  private static RecipeResource createRecipeResource(PersistenceClients persistenceClients) {
+  private static RecipeResource createRecipeResource(
+      PersistenceClients persistenceClients, TextEmbedder textEmbedder) {
     LOGGER.info("Setup recipe resource");
+    IngredientMatchingService ingredientMatchingService =
+        new IngredientMatchingService(
+            new QdrantIngredientSearchRepository(persistenceClients),
+            new MongoProductRepository(persistenceClients),
+            textEmbedder);
     return new RecipeResourceImpl(
         new RecipeService(
             new MongoRecipeRepository(persistenceClients),
             new QdrantRecipeSearchRepository(persistenceClients),
-            new OnnxTextEmbedder(EmbeddingConfiguration.fromEnvironment().modelDirectory())));
+            ingredientMatchingService,
+            textEmbedder));
   }
 
-  private static IngredientMatchingResource createIngredientMatchingResource() {
+  private static IngredientMatchingResource createIngredientMatchingResource(
+      PersistenceClients persistenceClients, TextEmbedder textEmbedder) {
     LOGGER.info("Setup ingredient matching resource");
-    return new IngredientMatchingResourceImpl(new IngredientMatchingService());
+    return new IngredientMatchingResourceImpl(
+        new IngredientMatchingService(
+            new QdrantIngredientSearchRepository(persistenceClients),
+            new MongoProductRepository(persistenceClients),
+            textEmbedder));
   }
 
   private static void startEtlIfEnabled() {

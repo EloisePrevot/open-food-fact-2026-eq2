@@ -3,9 +3,11 @@ package ca.ulaval.glo4003.ws.api.matching;
 import ca.ulaval.glo4003.ws.api.matching.dto.ContainsRequestDto;
 import ca.ulaval.glo4003.ws.api.matching.dto.IngredientMatchRequestDto;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 
@@ -17,6 +19,11 @@ public interface IngredientMatchingResource {
   @Consumes(MediaType.APPLICATION_JSON)
   @Produces(MediaType.APPLICATION_JSON)
   Response matchIngredient(IngredientMatchRequestDto request);
+
+  @GET
+  @Path("/marques")
+  @Produces(MediaType.APPLICATION_JSON)
+  Response suggestBrands(@QueryParam("q") String query, @QueryParam("limite") int limite);
 
   @POST
   @Path("/contient")

@@ -13,8 +13,9 @@ from qdrant_client.http import models
 from tqdm import tqdm
 
 from connections import DatabaseConnections
-from load.batching import batched, capped
+from load.batching import batched
 from load.load_state import LoadState, is_up_to_date, requested_state
+from load.stratified_sample import category_of, resolve_limit, stratified_sample
 from transform.transform import DOCUMENT_SOURCES, PRODUCT, RECIPE, DocumentSource
 from transform.values import NUTRI_SCORE_GRADES
 
@@ -186,9 +187,19 @@ class QdrantDataStore:
         )
 
     def _create_collection(self, name: str) -> None:
+        # Vecteurs et index HNSW stockés sur disque (memory-map) plutôt qu'en RAM.
+        # Le conteneur partage ~8 Gio avec la JVM, Postgres, Mongo et le modèle
+        # d'embeddings ; garder ~65 000 vecteurs 384-D hors du tas évite un
+        # dépassement mémoire (OOM) à l'indexation, au prix d'une latence accrue,
+        # acceptable pour une preuve de concept.
         self.client.create_collection(
             collection_name=name,
-            vectors_config=models.VectorParams(size=VECTOR_SIZE, distance=models.Distance.COSINE),
+            vectors_config=models.VectorParams(
+                size=VECTOR_SIZE,
+                distance=models.Distance.COSINE,
+                on_disk=True,
+                hnsw_config=models.HnswConfigDiff(on_disk=True),
+            ),
         )
 
     def _create_payload_indexes(self, name: str, indexes: dict[str, models.PayloadSchemaType]) -> None:
@@ -251,11 +262,12 @@ def load_source(
     limit: int | None,
     skip_up_to_date: bool = False,
 ) -> dict[str, int]:
-    state = requested_state(connections.postgres, source.raw_source, limit, EMBEDDING_MODEL)
+    source_limit = resolve_limit(source.kind, limit)
+    state = requested_state(connections.postgres, source.raw_source, source_limit, EMBEDDING_MODEL)
     if skip_up_to_date and is_up_to_date(store.load_state(source.kind, source.label), state):
         print(f"Qdrant : {source.label} déjà à jour, ignoré")
         return {"dejaAJour": 1}
-    stats = _load(connections, store, source, limit)
+    stats = _load(connections, store, source, source_limit)
     store.save_load_state(source.kind, source.label, state)
     return stats
 
@@ -268,7 +280,9 @@ def _load(
 ) -> dict[str, int]:
     print(f"Qdrant : {source.label}...")
     stats: Counter = Counter()
-    documents = capped(source.documents(connections.postgres, stats), limit)
+    documents = stratified_sample(
+        source.documents(connections.postgres, stats), limit, category_of(source.kind)
+    )
     stats.update(store.upsert(source.kind, map(source.to_point, documents)))
     return dict(stats)
 

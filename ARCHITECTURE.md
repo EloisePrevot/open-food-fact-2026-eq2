@@ -405,6 +405,8 @@ Recettes – type : recettes propres, traduite en français et un champ type
 
 Produits : catalogues des produits nettoyés de OFF et CNF
 
+Volume et échantillonnage: PostgreSQL conserve l'extraction brute complète; les DBs MongoDB et Qdrant sont un sous-échantillon de 50 000 produits et 10 000 recettes. L'échantillon est stratifié par catégorie (catégorie alimentaire pour les produits, type pour les recettes). Les documents sont regroupés par catégorie puis prélevés à tour de rôle jusqu'à la cible de sorte que les catégories rares (par exemple farine d'amande, poudre à pâte) soient conservées plutôt que noyées par les catégories dominantes. Un tirage par les premiers arrivés ou purement aléatoire les ferait disparaître et fausserait l'appariement.
+
 ### 2. Exemple réel de chaque donnée conservée
 
 **Recettes**

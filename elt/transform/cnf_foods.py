@@ -52,14 +52,14 @@ def clean_cnf_food(row: RawRow, lookups: CnfLookups) -> dict[str, Any] | None:
         "produitDeBase": True,
         "codeBarres": None,
         "nomProduit": french or english,
-        "nomFr": french or None,
-        "nomEn": english or None,
+        "nomFr": french,
+        "nomEn": english,
         "nomScientifique": optional_text(food.get("ScientificName")),
         "marque": None,
         "marques": [],
-        "categorie": french_or_english(group, "FoodGroupName") or None,
+        "categorie": french_or_english(group, "FoodGroupName"),
         "categorieEn": optional_text(group.get("FoodGroupName")),
-        "origineDonnee": french_or_english(origin, "FoodSourceDescription") or None,
+        "origineDonnee": french_or_english(origin, "FoodSourceDescription"),
         "nutriScore": None,
         "nova": None,
         "ecoScore": None,
@@ -70,6 +70,7 @@ def clean_cnf_food(row: RawRow, lookups: CnfLookups) -> dict[str, Any] | None:
         "rendements": lookups.yields.get(food_id, []),
         "cles": ingredient_keys(french, english),
         "refBrut": row.reference(),
+        "_chargeBrute": food,
     }
 
 

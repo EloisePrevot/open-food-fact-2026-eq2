@@ -17,7 +17,6 @@ from raw_models import RawRecord
 
 TABLE = "off_products"
 ORDINAL_COLUMN = "record_ordinal"
-_PROGRESS_INTERVAL = 250_000
 
 
 def replace_off_products(connection: psycopg.Connection, records: Iterable[RawRecord]) -> int:
@@ -54,8 +53,6 @@ def _copy_rows(connection: psycopg.Connection, columns: list[str], records: Iter
         for record in records:
             copy.write_row(_row(record, columns))
             count += 1
-            if count % _PROGRESS_INTERVAL == 0:
-                print(f"  {count:,} produits OFF copiés dans PostgreSQL")
     return count
 
 

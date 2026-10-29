@@ -1,17 +1,28 @@
 package ca.ulaval.glo4003.application.recipes;
 
+import ca.ulaval.glo4003.application.matching.IngredientMatchingService;
+import ca.ulaval.glo4003.application.matching.ProductPreferences;
+import ca.ulaval.glo4003.application.matching.ScoredProductDocument;
+import ca.ulaval.glo4003.application.products.model.ProductDocument;
+import ca.ulaval.glo4003.application.recipes.model.RecipeDetailDocument;
+import ca.ulaval.glo4003.application.recipes.model.RecipeDetailDocument.RecipeIngredient;
 import ca.ulaval.glo4003.application.recipes.model.RecipeDocument;
 import ca.ulaval.glo4003.application.search.RecipeSearchRepository;
 import ca.ulaval.glo4003.application.search.TextEmbedder;
 import ca.ulaval.glo4003.application.search.model.ScoredRecipe;
 import ca.ulaval.glo4003.application.shared.InvalidRequestException;
-import ca.ulaval.glo4003.application.shared.NotImplementedException;
+import ca.ulaval.glo4003.application.shared.NotFoundException;
 import ca.ulaval.glo4003.ws.api.recipe.dto.CookRequestDto;
 import ca.ulaval.glo4003.ws.api.recipe.dto.CookResponseDto;
+import ca.ulaval.glo4003.ws.api.recipe.dto.CookResponseDto.IngredientRecommendationDto;
+import ca.ulaval.glo4003.ws.api.recipe.dto.CookResponseDto.RecommendedProductDto;
+import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeDetailDto;
+import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeDetailDto.RecipeIngredientDto;
 import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeSearchRequestDto;
 import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeSearchResponseDto;
 import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeSearchResponseDto.RecipeSummaryDto;
 import ca.ulaval.glo4003.ws.api.recipe.dto.RecipeTypesDto;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -22,14 +33,17 @@ public class RecipeService {
 
   private final RecipeRepository recipeRepository;
   private final RecipeSearchRepository recipeSearchRepository;
+  private final IngredientMatchingService ingredientMatchingService;
   private final TextEmbedder textEmbedder;
 
   public RecipeService(
       RecipeRepository recipeRepository,
       RecipeSearchRepository recipeSearchRepository,
+      IngredientMatchingService ingredientMatchingService,
       TextEmbedder textEmbedder) {
     this.recipeRepository = recipeRepository;
     this.recipeSearchRepository = recipeSearchRepository;
+    this.ingredientMatchingService = ingredientMatchingService;
     this.textEmbedder = textEmbedder;
   }
 
@@ -50,8 +64,75 @@ public class RecipeService {
     return response;
   }
 
+  public RecipeDetailDto getRecipe(String identifiant) {
+    return recipeRepository
+        .findDetailById(identifiant)
+        .map(RecipeService::toDetail)
+        .orElseThrow(
+            () -> new NotFoundException("Aucune recette pour l'identifiant " + identifiant));
+  }
+
   public CookResponseDto cook(CookRequestDto request) {
-    throw new NotImplementedException();
+    validateCook(request);
+    RecipeDetailDocument recipe =
+        recipeRepository
+            .findDetailById(request.identifiantRecette)
+            .orElseThrow(
+                () ->
+                    new NotFoundException(
+                        "Aucune recette pour l'identifiant " + request.identifiantRecette));
+
+    ProductPreferences preferences =
+        new ProductPreferences(request.marque, request.nutriScoreMin, request.novaMax);
+    Optional<Boolean> produitDeBase = Optional.ofNullable(request.preferenceProduitDeBase);
+
+    CookResponseDto response = new CookResponseDto();
+    response.identifiantRecette = recipe.identifiant();
+    response.nomRecette = recipe.nom();
+    response.ingredients = new ArrayList<>();
+    response.ingredientsSansCorrespondance = new ArrayList<>();
+
+    for (RecipeIngredient ingredient : recipe.ingredients()) {
+      List<ScoredProductDocument> matches =
+          ingredientMatchingService.recommendProducts(
+              ingredient.nom(), preferences, produitDeBase, request.limiteParIngredient);
+      if (matches.isEmpty()) {
+        response.ingredientsSansCorrespondance.add(ingredient.texteOriginal());
+      } else {
+        response.ingredients.add(toRecommendation(ingredient, matches));
+      }
+    }
+    return response;
+  }
+
+  private static IngredientRecommendationDto toRecommendation(
+      RecipeIngredient ingredient, List<ScoredProductDocument> matches) {
+    IngredientRecommendationDto recommendation = new IngredientRecommendationDto();
+    recommendation.ingredientTexte = ingredient.texteOriginal();
+    recommendation.produits = matches.stream().map(RecipeService::toRecommendedProduct).toList();
+    return recommendation;
+  }
+
+  private static RecommendedProductDto toRecommendedProduct(ScoredProductDocument scored) {
+    ProductDocument product = scored.product();
+    RecommendedProductDto dto = new RecommendedProductDto();
+    dto.identifiant = product.identifiant();
+    dto.nomProduit = product.nomProduit();
+    dto.marque = product.marques().isEmpty() ? null : product.marques().get(0);
+    dto.nutriScore = product.nutriScore();
+    dto.nova = product.nova();
+    dto.produitDeBase = product.produitDeBase();
+    dto.score = scored.score();
+    return dto;
+  }
+
+  private static void validateCook(CookRequestDto request) {
+    if (request == null || request.limiteParIngredient <= 0) {
+      throw new InvalidRequestException("La limite par ingrédient doit être un entier positif.");
+    }
+    if (nonBlank(request.identifiantRecette).isEmpty()) {
+      throw new InvalidRequestException("L'identifiant de la recette est obligatoire.");
+    }
   }
 
   private List<RecipeSummaryDto> browse(Optional<String> recipeType, int limit) {
@@ -74,6 +155,26 @@ public class RecipeService {
     List<String> ids = scoredRecipes.stream().map(ScoredRecipe::identifiant).toList();
     return recipeRepository.findByIds(ids).stream()
         .collect(Collectors.toMap(RecipeDocument::identifiant, Function.identity()));
+  }
+
+  private static RecipeDetailDto toDetail(RecipeDetailDocument recipe) {
+    RecipeDetailDto detail = new RecipeDetailDto();
+    detail.identifiant = recipe.identifiant();
+    detail.nom = recipe.nom();
+    detail.description = recipe.description();
+    detail.type = recipe.types();
+    detail.etapes = recipe.etapes();
+    detail.ingredients = recipe.ingredients().stream().map(RecipeService::toIngredient).toList();
+    return detail;
+  }
+
+  private static RecipeIngredientDto toIngredient(
+      RecipeDetailDocument.RecipeIngredient ingredient) {
+    RecipeIngredientDto dto = new RecipeIngredientDto();
+    dto.nom = ingredient.nom();
+    dto.cle = ingredient.cle();
+    dto.texteOriginal = ingredient.texteOriginal();
+    return dto;
   }
 
   private static RecipeSummaryDto toSummary(RecipeDocument recipe, Double score) {

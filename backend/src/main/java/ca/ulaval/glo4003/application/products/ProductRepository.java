@@ -14,4 +14,6 @@ public interface ProductRepository {
   QualityIndicatorCounts countQualityIndicators();
 
   Map<String, Long> countByCategory();
+
+  List<String> findBrands(String query, int limit);
 }

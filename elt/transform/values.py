@@ -12,8 +12,8 @@ def text(value: Any) -> str:
     return "" if value is None else str(value).strip()
 
 
-def optional_text(value: Any) -> str | None:
-    return text(value) or None
+def optional_text(value: Any) -> str:
+    return text(value)
 
 
 def to_float(value: Any) -> float | None:

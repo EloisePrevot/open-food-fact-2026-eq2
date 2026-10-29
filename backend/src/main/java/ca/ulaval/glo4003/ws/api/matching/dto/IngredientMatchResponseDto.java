@@ -11,5 +11,8 @@ public class IngredientMatchResponseDto {
     public String nomProduit;
     public double score;
     public boolean produitDeBase;
+    public String nutriScore;
+    public Integer nova;
+    public List<String> marques;
   }
 }
