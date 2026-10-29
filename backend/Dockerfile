@@ -1,16 +1,15 @@
 # syntax=docker/dockerfile:1
 
-# Build context is the repo root so the ELT pipeline (elt/) can be shipped with the API.
-
 # --- Build stage: compile and assemble the runnable distribution ---
 FROM eclipse-temurin:25-jdk AS build
 WORKDIR /app
 
 # Warm the Gradle cache with just the build scripts first for better layer caching.
-COPY backend/gradlew ./
-COPY backend/gradle ./gradle
-COPY backend/settings.gradle backend/build.gradle backend/gradle.properties ./
-RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew && (./gradlew --no-daemon dependencies || true)
+COPY gradlew ./
+COPY gradle ./gradle
+COPY settings.gradle build.gradle gradle.properties ./
+# Strip any CRLF line endings (e.g. from Windows checkouts) so /bin/sh can run the script.
+RUN sed -i 's/\r$//' ./gradlew && chmod +x ./gradlew && ./gradlew --no-daemon dependencies || true
 
 # Build the application distribution.
 COPY backend/config ./config

@@ -1,4 +1,4 @@
-package ca.ulaval.glo4003.persistence.sqlite;
+package ca.ulaval.glo4003.persistence.postgres;
 
 import ca.ulaval.glo4003.application.data.RawRecordRepository;
 import ca.ulaval.glo4003.application.data.model.DataSource;
@@ -12,9 +12,10 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.Optional;
 
-public class SqliteRawRecordRepository implements RawRecordRepository {
+public class PostgresRawRecordRepository implements RawRecordRepository {
+  private final PersistenceClients persistenceClients;
 
-  private static final String FIND_BY_REFERENCE =
+private static final String FIND_BY_REFERENCE =
       """
       SELECT artifacts.source, artifacts.imported_at, records.payload_json
       FROM raw_records records
@@ -31,8 +32,27 @@ public class SqliteRawRecordRepository implements RawRecordRepository {
 
   private final PersistenceClients persistenceClients;
 
-  public SqliteRawRecordRepository(PersistenceClients persistenceClients) {
+  public PostgresRawRecordRepository(PersistenceClients persistenceClients) {
     this.persistenceClients = persistenceClients;
+  }
+
+  @Override
+  public void save(RawRecord rawRecord) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  @Override
+  public Optional<RawRecord> findById(String id) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  @Override
+  public long countBySource(DataSource source) {
+    throw new UnsupportedOperationException("Not implemented");
+  }
+
+  Connection openConnection() throws SQLException {
+    return persistenceClients.openPostgresConnection();
   }
 
   @Override

@@ -1,10 +1,10 @@
-"""Clients réutilisables pour SQLite, MongoDB et Qdrant."""
+"""Clients réutilisables pour PostgreSQL, MongoDB et Qdrant."""
 
 from __future__ import annotations
 
-import sqlite3
 from dataclasses import dataclass
 
+import psycopg
 from pymongo import MongoClient
 from pymongo.database import Database
 from qdrant_client import QdrantClient
@@ -12,17 +12,16 @@ from qdrant_client import QdrantClient
 from config import Settings
 
 
-def open_sqlite_connection(settings: Settings) -> sqlite3.Connection:
-    """Ouvre SQLite au chemin configuré et prépare son dossier parent."""
-    settings.sqlite_path.parent.mkdir(parents=True, exist_ok=True)
-    return sqlite3.connect(settings.sqlite_path)
+def open_postgres_connection(settings: Settings) -> psycopg.Connection:
+    """Ouvre une connexion PostgreSQL au DSN configuré."""
+    return psycopg.connect(settings.postgres_dsn)
 
 
 @dataclass
 class DatabaseConnections:
     """Clients ouverts vers les trois moteurs utilisés par le pipeline."""
 
-    sqlite: sqlite3.Connection
+    postgres: psycopg.Connection
     mongo_client: MongoClient
     mongo_database: Database
     qdrant: QdrantClient
@@ -32,7 +31,7 @@ class DatabaseConnections:
         mongo_client = MongoClient(settings.mongodb_uri, serverSelectionTimeoutMS=5_000)
 
         return cls(
-            sqlite=open_sqlite_connection(settings),
+            postgres=open_postgres_connection(settings),
             mongo_client=mongo_client,
             mongo_database=mongo_client[settings.mongodb_database],
             qdrant=QdrantClient(url=settings.qdrant_url, timeout=5.0),
@@ -40,12 +39,12 @@ class DatabaseConnections:
 
     def verify_connections(self) -> None:
         """Exécute une opération sans effet de bord sur chaque moteur."""
-        self.sqlite.execute("SELECT 1").fetchone()
+        self.postgres.execute("SELECT 1").fetchone()
         self.mongo_client.admin.command("ping")
         self.qdrant.get_collections()
 
     def close(self) -> None:
-        self.sqlite.close()
+        self.postgres.close()
         self.mongo_client.close()
         self.qdrant.close()
 

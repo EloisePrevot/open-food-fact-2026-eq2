@@ -164,7 +164,7 @@ dependencies {
     implementation 'org.slf4j:slf4j-api:2.0.18'
     implementation 'at.favre.lib:bcrypt:0.10.2'
     implementation 'org.mongodb:mongodb-driver-sync:5.8.0'
-    implementation 'org.xerial:sqlite-jdbc:3.50.3.0'
+    implementation 'org.postgresql:postgresql:42.7.8'
     implementation 'io.qdrant:client:1.19.0'
     implementation 'com.microsoft.onnxruntime:onnxruntime:1.22.0'
     implementation 'ai.djl.huggingface:tokenizers:0.33.0'
@@ -215,12 +215,23 @@ tasks.named('test') {
 }
 
 tasks.register('integrationTest', Test) {
-    description = 'Runs the integration tests.'
+    description = 'Runs self-contained integration tests (no external databases required).'
     group = 'verification'
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
     include '**/*IT.class'
+    // Database-backed tests require running services; keep them out of the default build.
+    exclude '**/*DatabaseIT.class'
     shouldRunAfter tasks.named('test')
+}
+
+tasks.register('databaseTest', Test) {
+    description = 'Runs integration tests that require running MongoDB, Qdrant and PostgreSQL.'
+    group = 'verification'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    include '**/*DatabaseIT.class'
+    shouldRunAfter tasks.named('integrationTest')
 }
 
 tasks.named('check') {
