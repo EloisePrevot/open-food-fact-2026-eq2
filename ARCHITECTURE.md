@@ -1,9 +1,9 @@
 # Architecture.md
 
-## Moteur 1 : SQLite - SQL
+## Moteur 1 : PostgreSQL - SQL
 
 ### 1. Type de données conservées
-Les données conservées dans ce moteur sont les données brutes extraites de nos trois sources de données. Nous avons choisi de conserver les données brutes dans un moteur SQL, puisqu’elles peuvent être téléchargées au format CSV, qui peut facilement se convertir en SQL. Nous avons également choisi le moteur SQLite pour sa simplicité d’utilisation et pour sa facilité de conversion de CSV en une base de données SQLite.
+Les données conservées dans ce moteur sont les données brutes extraites de nos trois sources de données. Nous avons choisi de conserver les données brutes dans un moteur SQL, puisqu’elles peuvent être téléchargées au format CSV, qui se charge efficacement en SQL. Nous avons retenu PostgreSQL pour sa robustesse, son support natif du type `JSONB` (utile pour conserver les enregistrements bruts sans aplatir leur structure) et sa commande `COPY`, qui permet un chargement en masse très rapide des fichiers CSV et JSON.
 
 ### 2. Exemple réel de chaque donnée conservée
 **Recettes**
@@ -373,7 +373,7 @@ Les données conservées dans ce moteur sont les données brutes extraites de no
 | `YieldDescriptionF` | `quantité requise pour préparer  100ml` |
 
 ### 3. Modèle de données envisagé
-Nos trois sources de données contiennent 14 fichiers CSV. Le moteur SQLite va ainsi contenir une table par fichier, soit 14 tables. 
+Nos trois sources de données contiennent 14 fichiers CSV. Le moteur PostgreSQL va ainsi contenir une table par fichier, soit 14 tables. 
 * La source de recettes représente une seule table.
 * La source OFF contient les produits à code barre et représente une seule table.
 * La source CNF contient les produits de base et représente 12 tables.
@@ -381,8 +381,8 @@ Nos trois sources de données contiennent 14 fichiers CSV. Le moteur SQLite va a
 ### 4. Requêtes de l'application servies
 | Route | Moteur |
 | --- | --- |
-| GET /donnees_brutes/{identifiant} | SQLite |
-| GET /extracted_data | SQLite |
+| GET /donnees_brutes/{identifiant} | PostgreSQL |
+| GET /extracted_data | PostgreSQL |
 
 ### 5. Données présentes dans plus d'un moteur
 Les données de ces modèles sont dans la plupart des cas utilisés dans une autre base de données. Par exemple, les produits de l'Amérique du Nord de OFF et les autres éléments des bases de données de recette et la CNF se retrouve dans la base de données Mongo. Puisque cette base de données sert seulement à chercher données sans filtres, la priorité sera toujours les données traitées, c’est à dire Mongo. 

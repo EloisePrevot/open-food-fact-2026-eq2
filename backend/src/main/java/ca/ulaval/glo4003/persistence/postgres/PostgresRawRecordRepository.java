@@ -1,4 +1,4 @@
-package ca.ulaval.glo4003.persistence.sqlite;
+package ca.ulaval.glo4003.persistence.postgres;
 
 import ca.ulaval.glo4003.application.data.RawRecordRepository;
 import ca.ulaval.glo4003.application.data.model.DataSource;
@@ -8,10 +8,10 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.Optional;
 
-public class SqliteRawRecordRepository implements RawRecordRepository {
+public class PostgresRawRecordRepository implements RawRecordRepository {
   private final PersistenceClients persistenceClients;
 
-  public SqliteRawRecordRepository(PersistenceClients persistenceClients) {
+  public PostgresRawRecordRepository(PersistenceClients persistenceClients) {
     this.persistenceClients = persistenceClients;
   }
 
@@ -31,6 +31,6 @@ public class SqliteRawRecordRepository implements RawRecordRepository {
   }
 
   Connection openConnection() throws SQLException {
-    return persistenceClients.openSqliteConnection();
+    return persistenceClients.openPostgresConnection();
   }
 }

@@ -1,12 +1,21 @@
-"""Stockage SQLite append-only des artefacts et enregistrements bruts."""
+"""Stockage PostgreSQL append-only des artefacts et enregistrements bruts.
+
+La couche brute est reconstruite à partir des sources, jamais modifiée en place.
+On optimise donc le chargement pour la vitesse :
+
+* tables ``UNLOGGED`` : pas de journal WAL, parfait pour des données rejouables ;
+* ``COPY ... FROM STDIN`` au lieu de ``INSERT``, bien plus rapide en masse ;
+* index secondaires créés une seule fois, après le chargement.
+"""
 
 from __future__ import annotations
 
 import hashlib
 import json
-import sqlite3
 from collections.abc import Iterable
 from datetime import UTC, datetime
+
+import psycopg
 
 from elt.raw_models import RawArtifact, RawRecord
 
@@ -14,63 +23,72 @@ from elt.raw_models import RawArtifact, RawRecord
 class RawDataStore:
     """Persiste les données brutes sans leur appliquer de règle métier."""
 
-    _INSERT_BATCH_SIZE = 1_000
-
-    def __init__(self, connection: sqlite3.Connection) -> None:
+    def __init__(self, connection: psycopg.Connection) -> None:
         self._connection = connection
 
     def initialize_schema(self) -> None:
-        self._connection.execute("PRAGMA foreign_keys = ON")
-        self._connection.execute("PRAGMA journal_mode = WAL")
-        self._connection.executescript(
+        """Crée les tables brutes (UNLOGGED) sans les index secondaires."""
+        self._connection.execute(
             """
-            CREATE TABLE IF NOT EXISTS raw_artifacts (
-                artifact_id INTEGER PRIMARY KEY,
-                source TEXT NOT NULL,
-                relative_path TEXT NOT NULL,
-                media_type TEXT NOT NULL,
-                encoding TEXT NOT NULL,
-                sha256 TEXT NOT NULL,
-                imported_at TEXT NOT NULL,
-                record_count INTEGER NOT NULL DEFAULT 0,
-                UNIQUE(source, relative_path, sha256)
+            CREATE UNLOGGED TABLE IF NOT EXISTS raw_artifacts (
+                artifact_id   BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+                source        TEXT        NOT NULL,
+                relative_path TEXT        NOT NULL,
+                media_type    TEXT        NOT NULL,
+                encoding      TEXT        NOT NULL,
+                sha256        TEXT        NOT NULL,
+                imported_at   TIMESTAMPTZ NOT NULL,
+                record_count  BIGINT      NOT NULL DEFAULT 0,
+                UNIQUE (source, relative_path, sha256)
             );
-
-            CREATE TABLE IF NOT EXISTS raw_records (
-                artifact_id INTEGER NOT NULL,
-                record_ordinal INTEGER NOT NULL,
-                payload_json TEXT NOT NULL,
-                payload_sha256 TEXT NOT NULL,
-                PRIMARY KEY (artifact_id, record_ordinal),
-                FOREIGN KEY (artifact_id) REFERENCES raw_artifacts(artifact_id)
-            );
-
-            CREATE INDEX IF NOT EXISTS raw_records_payload_sha256_index
-                ON raw_records(artifact_id, payload_sha256);
             """
         )
+        self._connection.execute(
+            """
+            CREATE UNLOGGED TABLE IF NOT EXISTS raw_records (
+                artifact_id    BIGINT NOT NULL REFERENCES raw_artifacts(artifact_id),
+                record_ordinal BIGINT NOT NULL,
+                payload_json   JSONB  NOT NULL,
+                payload_sha256 TEXT   NOT NULL,
+                PRIMARY KEY (artifact_id, record_ordinal)
+            );
+            """
+        )
+        self._connection.commit()
+
+    def create_indexes(self) -> None:
+        """Crée les index secondaires une fois le chargement terminé."""
+        self._connection.execute(
+            """
+            CREATE INDEX IF NOT EXISTS raw_records_payload_sha256_index
+                ON raw_records (artifact_id, payload_sha256);
+            """
+        )
+        self._connection.commit()
 
     def ingest(self, artifact: RawArtifact, records: Iterable[RawRecord]) -> int:
         """Enregistre un artefact une seule fois par contenu et chemin source."""
         artifact_hash = self._hash_file(artifact)
-        existing_artifact = self._connection.execute(
-            """
-            SELECT artifact_id
-            FROM raw_artifacts
-            WHERE source = ? AND relative_path = ? AND sha256 = ?
-            """,
-            (artifact.source, artifact.relative_path, artifact_hash),
-        ).fetchone()
 
-        if existing_artifact is not None:
-            return 0
+        with self._connection.transaction():
+            existing_artifact = self._connection.execute(
+                """
+                SELECT artifact_id
+                FROM raw_artifacts
+                WHERE source = %s AND relative_path = %s AND sha256 = %s
+                """,
+                (artifact.source, artifact.relative_path, artifact_hash),
+            ).fetchone()
 
-        with self._connection:
-            cursor = self._connection.execute(
+            if existing_artifact is not None:
+                return 0
+
+            artifact_id = self._connection.execute(
                 """
                 INSERT INTO raw_artifacts (
                     source, relative_path, media_type, encoding, sha256, imported_at
-                ) VALUES (?, ?, ?, ?, ?, ?)
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING artifact_id
                 """,
                 (
                     artifact.source,
@@ -78,57 +96,45 @@ class RawDataStore:
                     artifact.media_type,
                     artifact.encoding,
                     artifact_hash,
-                    datetime.now(UTC).isoformat(),
+                    datetime.now(UTC),
                 ),
-            )
-            artifact_id = cursor.lastrowid
-            record_count = self._insert_records(artifact_id, records)
+            ).fetchone()[0]
+
+            record_count = self._copy_records(artifact_id, records)
+
             self._connection.execute(
-                "UPDATE raw_artifacts SET record_count = ? WHERE artifact_id = ?",
+                "UPDATE raw_artifacts SET record_count = %s WHERE artifact_id = %s",
                 (record_count, artifact_id),
             )
 
         return record_count
 
-    def _insert_records(self, artifact_id: int, records: Iterable[RawRecord]) -> int:
-        batch: list[tuple[int, int, str, str]] = []
+    def _copy_records(self, artifact_id: int, records: Iterable[RawRecord]) -> int:
+        """Charge les enregistrements via COPY FROM STDIN (chemin le plus rapide)."""
         record_count = 0
 
-        for record in records:
-            payload_json = json.dumps(
-                record.payload,
-                ensure_ascii=False,
-                separators=(",", ":"),
-                allow_nan=False,
-            )
-            batch.append(
-                (
-                    artifact_id,
-                    record.ordinal,
-                    payload_json,
-                    hashlib.sha256(payload_json.encode("utf-8")).hexdigest(),
-                )
-            )
-            record_count += 1
-
-            if len(batch) == self._INSERT_BATCH_SIZE:
-                self._insert_batch(batch)
-                batch.clear()
-
-        if batch:
-            self._insert_batch(batch)
+        with self._connection.cursor() as cursor:
+            with cursor.copy(
+                """
+                COPY raw_records (
+                    artifact_id, record_ordinal, payload_json, payload_sha256
+                ) FROM STDIN
+                """
+            ) as copy:
+                for record in records:
+                    payload_json = json.dumps(
+                        record.payload,
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                        allow_nan=False,
+                    )
+                    payload_sha256 = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
+                    copy.write_row(
+                        (artifact_id, record.ordinal, payload_json, payload_sha256)
+                    )
+                    record_count += 1
 
         return record_count
-
-    def _insert_batch(self, batch: list[tuple[int, int, str, str]]) -> None:
-        self._connection.executemany(
-            """
-            INSERT INTO raw_records (
-                artifact_id, record_ordinal, payload_json, payload_sha256
-            ) VALUES (?, ?, ?, ?)
-            """,
-            batch,
-        )
 
     @staticmethod
     def _hash_file(artifact: RawArtifact) -> str:
