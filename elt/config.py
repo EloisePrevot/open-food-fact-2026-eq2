@@ -12,7 +12,7 @@ class Settings:
     """Valeurs de connexion lues une seule fois au démarrage du pipeline."""
 
     raw_directory: Path
-    sqlite_path: Path
+    postgres_dsn: str
     mongodb_uri: str
     mongodb_database: str
     qdrant_url: str
@@ -21,11 +21,13 @@ class Settings:
     def from_environment(cls) -> Settings:
         pipeline_directory = Path(__file__).parent
         raw_directory = Path(getenv("ELT_RAW_DIRECTORY", pipeline_directory / "raw"))
-        database_directory = Path(getenv("ELT_DATABASE_DIRECTORY", pipeline_directory / "db"))
 
         return cls(
             raw_directory=raw_directory,
-            sqlite_path=Path(getenv("SQLITE_PATH", database_directory / "raw-data.db")),
+            postgres_dsn=getenv(
+                "POSTGRES_DSN",
+                "postgresql://postgres:postgres@localhost:5432/open_food_facts",
+            ),
             mongodb_uri=getenv(
                 "MONGODB_URI",
                 "mongodb://root:root@localhost:27017/?authSource=admin",

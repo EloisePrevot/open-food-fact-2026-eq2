@@ -119,7 +119,7 @@ Si `backend:verify` échoue sur le formatage, lancez `pnpm backend:format` puis 
 ### Docker
 
 `docker compose` démarre toute la pile : backend (`:80`), frontend (`:8081`),
-Qdrant (`:6333`) et MongoDB (`:27017`). SQLite reste un fichier local (`elt/db/`).
+Qdrant (`:6333`), MongoDB (`:27017`) et PostgreSQL (`:5432`).
 
 Le backend répond sur le port **80** (exigence de l'énoncé) à la requête
 `GET /heartbeat`. Ce port est fixé par l'énoncé et ne doit pas être changé pour
@@ -175,14 +175,18 @@ de connexion :
 mongodb://root:root@localhost:27017/?authSource=admin
 ```
 
-#### SQLite — fichier local, pas de serveur
+#### PostgreSQL — CLI ou interface graphique
 
-SQLite est un simple fichier dans `elt/db/` (aucun service, donc aucun panneau
-web). Inspectez-le avec le CLI `sqlite3` :
+Via `psql` directement dans le conteneur :
 
 ```sh
-sqlite3 elt/db/<nom-du-fichier>.db
-# puis, dans le prompt : .tables  puis  .schema
+docker compose exec postgres psql -U postgres -d open_food_facts
+# puis, dans le prompt : \dt  puis  \d raw_records
 ```
 
-Ou avec une interface graphique comme [DB Browser for SQLite](https://sqlitebrowser.org/).
+Via une interface graphique (DBeaver, pgAdmin) depuis l'hôte, utilisez la chaîne
+de connexion :
+
+```
+postgresql://postgres:postgres@localhost:5432/open_food_facts
+```

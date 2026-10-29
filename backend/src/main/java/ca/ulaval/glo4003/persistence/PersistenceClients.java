@@ -13,17 +13,23 @@ public final class PersistenceClients implements AutoCloseable {
   private final MongoClient mongoClient;
   private final MongoDatabase mongoDatabase;
   private final QdrantClient qdrantClient;
-  private final String sqliteJdbcUrl;
+  private final String postgresJdbcUrl;
+  private final String postgresUser;
+  private final String postgresPassword;
 
   private PersistenceClients(
       MongoClient mongoClient,
       MongoDatabase mongoDatabase,
       QdrantClient qdrantClient,
-      String sqliteJdbcUrl) {
+      String postgresJdbcUrl,
+      String postgresUser,
+      String postgresPassword) {
     this.mongoClient = mongoClient;
     this.mongoDatabase = mongoDatabase;
     this.qdrantClient = qdrantClient;
-    this.sqliteJdbcUrl = sqliteJdbcUrl;
+    this.postgresJdbcUrl = postgresJdbcUrl;
+    this.postgresUser = postgresUser;
+    this.postgresPassword = postgresPassword;
   }
 
   public static PersistenceClients connect(PersistenceConfiguration configuration) {
@@ -35,7 +41,9 @@ public final class PersistenceClients implements AutoCloseable {
             QdrantGrpcClient.newBuilder(
                     configuration.qdrantHost(), configuration.qdrantPort(), false)
                 .build()),
-        configuration.sqliteJdbcUrl());
+        configuration.postgresJdbcUrl(),
+        configuration.postgresUser(),
+        configuration.postgresPassword());
   }
 
   public MongoDatabase mongoDatabase() {
@@ -46,8 +54,8 @@ public final class PersistenceClients implements AutoCloseable {
     return qdrantClient;
   }
 
-  public Connection openSqliteConnection() throws SQLException {
-    return DriverManager.getConnection(sqliteJdbcUrl);
+  public Connection openPostgresConnection() throws SQLException {
+    return DriverManager.getConnection(postgresJdbcUrl, postgresUser, postgresPassword);
   }
 
   @Override
