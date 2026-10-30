@@ -74,6 +74,8 @@ public class RecipeService {
 
   public CookResponseDto cook(CookRequestDto request) {
     validateCook(request);
+    ProductPreferences preferences =
+        new ProductPreferences(request.marque, request.nutriScoreMin, request.novaMax);
     RecipeDetailDocument recipe =
         recipeRepository
             .findDetailById(request.identifiantRecette)
@@ -82,8 +84,6 @@ public class RecipeService {
                     new NotFoundException(
                         "Aucune recette pour l'identifiant " + request.identifiantRecette));
 
-    ProductPreferences preferences =
-        new ProductPreferences(request.marque, request.nutriScoreMin, request.novaMax);
     Optional<Boolean> produitDeBase = Optional.ofNullable(request.preferenceProduitDeBase);
 
     CookResponseDto response = new CookResponseDto();

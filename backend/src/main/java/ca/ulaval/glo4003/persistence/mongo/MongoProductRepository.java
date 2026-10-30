@@ -1,6 +1,5 @@
 package ca.ulaval.glo4003.persistence.mongo;
 
-import static com.mongodb.client.model.Accumulators.first;
 import static com.mongodb.client.model.Accumulators.sum;
 import static com.mongodb.client.model.Aggregates.group;
 import static com.mongodb.client.model.Aggregates.limit;
@@ -35,6 +34,7 @@ public class MongoProductRepository implements ProductRepository {
   private static final String BRANDS_FIELD = "marques";
   private static final String CATEGORY_FIELD = "categorie";
   private static final String COUNT_FIELD = "count";
+  private static final String UNCATEGORIZED = "Sans catégorie";
   private static final Bson SUMMARY_FIELDS =
       include(NAME_FIELD, BASIC_FOOD_FIELD, NUTRI_SCORE_FIELD, NOVA_FIELD, BRANDS_FIELD);
 
@@ -51,8 +51,10 @@ public class MongoProductRepository implements ProductRepository {
 
   @Override
   public List<ProductDocument> findByIds(List<String> ids) {
-    return products.find(in("_id", ids)).projection(SUMMARY_FIELDS).map(
-            MongoProductRepository::toProduct)
+    return products
+        .find(in("_id", ids))
+        .projection(SUMMARY_FIELDS)
+        .map(MongoProductRepository::toProduct)
         .into(new ArrayList<>());
   }
 
@@ -68,13 +70,16 @@ public class MongoProductRepository implements ProductRepository {
     products
         .aggregate(
             List.of(
-                match(ne(CATEGORY_FIELD, null)),
-                group("$" + CATEGORY_FIELD, sum(COUNT_FIELD, 1)),
+                group(
+                    new Document("$ifNull", List.of("$" + CATEGORY_FIELD, "")),
+                    sum(COUNT_FIELD, 1)),
                 sort(descending(COUNT_FIELD))))
         .forEach(
             group ->
-                counts.put(
-                    group.getString("_id"), group.get(COUNT_FIELD, Number.class).longValue()));
+                counts.merge(
+                    categoryLabel(group.getString("_id")),
+                    group.get(COUNT_FIELD, Number.class).longValue(),
+                    Long::sum));
     return counts;
   }
 
@@ -96,6 +101,10 @@ public class MongoProductRepository implements ProductRepository {
                 limit(limit)))
         .forEach(group -> brands.add(group.getString("_id")));
     return brands;
+  }
+
+  private static String categoryLabel(String category) {
+    return category == null || category.isBlank() ? UNCATEGORIZED : category.strip();
   }
 
   private static Pattern caseInsensitiveContains(String query) {

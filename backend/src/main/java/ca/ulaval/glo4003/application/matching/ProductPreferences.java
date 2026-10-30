@@ -1,6 +1,7 @@
 package ca.ulaval.glo4003.application.matching;
 
 import ca.ulaval.glo4003.application.products.model.ProductDocument;
+import ca.ulaval.glo4003.application.shared.InvalidRequestException;
 import java.util.List;
 import java.util.Optional;
 
@@ -12,6 +13,8 @@ import java.util.Optional;
 public final class ProductPreferences {
 
   private static final List<String> NUTRI_SCORE_ORDER = List.of("a", "b", "c", "d", "e");
+  private static final int NOVA_MIN = 1;
+  private static final int NOVA_MAX = 4;
 
   private final String marque;
   private final String nutriScoreMin;
@@ -19,8 +22,22 @@ public final class ProductPreferences {
 
   public ProductPreferences(String marque, String nutriScoreMin, Integer novaMax) {
     this.marque = normalize(marque);
-    this.nutriScoreMin = normalize(nutriScoreMin);
-    this.novaMax = novaMax;
+    this.nutriScoreMin = validNutriScore(normalize(nutriScoreMin));
+    this.novaMax = validNova(novaMax);
+  }
+
+  private static String validNutriScore(String nutriScore) {
+    if (nutriScore != null && !NUTRI_SCORE_ORDER.contains(nutriScore.toLowerCase())) {
+      throw new InvalidRequestException("nutriScoreMin doit être une lettre de A à E.");
+    }
+    return nutriScore;
+  }
+
+  private static Integer validNova(Integer nova) {
+    if (nova != null && (nova < NOVA_MIN || nova > NOVA_MAX)) {
+      throw new InvalidRequestException("novaMax doit être un entier de 1 à 4.");
+    }
+    return nova;
   }
 
   public boolean accepts(ProductDocument product) {
@@ -58,6 +75,9 @@ public final class ProductPreferences {
   }
 
   private static String normalize(String value) {
-    return Optional.ofNullable(value).map(String::strip).filter(text -> !text.isEmpty()).orElse(null);
+    return Optional.ofNullable(value)
+        .map(String::strip)
+        .filter(text -> !text.isEmpty())
+        .orElse(null);
   }
 }

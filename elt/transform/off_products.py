@@ -6,7 +6,10 @@ from collections.abc import Iterator
 from typing import Any
 
 from extract.extract import OFF_SOURCE
+from transform.description_cleaning import clean_name, specific_categories, specific_main_category
 from transform.ingredient_identity import ingredient_keys
+from transform.nutri_score import document_fields as nutri_score_fields
+from transform.nutri_score import off_nutri_score
 from transform.raw_records import RawRow, clean_rows, iter_off_rows
 from transform.values import grade, optional_text, split_tags, strip_language, text, to_float, to_int
 
@@ -31,6 +34,9 @@ def clean_off_product(row: RawRow) -> dict[str, Any] | None:
     brands = split_tags(raw.get("brands"))
     categories = split_tags(raw.get("categories_en"))
     identifiant = f"off:{code}"
+    nutriments = nutriments_per_100g(raw)
+    cleaned = clean_name(name, remove_claims=True)
+    source_category = main_category(raw, categories)
     return {
         "_id": identifiant,
         "identifiant": identifiant,
@@ -38,13 +44,17 @@ def clean_off_product(row: RawRow) -> dict[str, Any] | None:
         "produitDeBase": False,
         "codeBarres": code,
         "nomProduit": name,
+        "nomNettoye": cleaned.name,
+        "nomsAlternatifs": list(cleaned.alternative_names),
+        "allegations": list(cleaned.claims),
         "nomGenerique": generic_name,
         "marque": ", ".join(brands),
         "marques": brands,
-        "categorie": main_category(raw, categories),
+        "categorie": specific_main_category(source_category, categories),
+        "categorieSource": source_category,
         "categories": categories,
-        "nutriScore": grade(raw.get("nutriscore_grade")),
-        "nutriScoreValeur": to_int(raw.get("nutriscore_score")),
+        "categoriesPrecises": specific_categories(categories),
+        **nutri_score_fields(off_nutri_score(raw, nutriments)),
         "nova": nova_group(raw),
         "ecoScore": grade(raw.get("environmental_score_grade")),
         "ingredientsTexte": optional_text(raw.get("ingredients_text")),
@@ -57,7 +67,7 @@ def clean_off_product(row: RawRow) -> dict[str, Any] | None:
         "pays": split_tags(raw.get("countries_tags")),
         "imageUrl": optional_text(raw.get("image_url")),
         "completude": to_float(raw.get("completeness")),
-        "nutriments": nutriments_per_100g(raw),
+        "nutriments": nutriments,
         "nutrimentsBase": "100 g",
         "cles": ingredient_keys(generic_name, name),
         "refBrut": row.reference(),

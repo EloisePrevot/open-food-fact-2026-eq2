@@ -65,7 +65,7 @@ def _latest_artifacts(postgres: psycopg.Connection, raw_source: str) -> list[str
 
 def _rules_fingerprint() -> str:
     digest = hashlib.sha256()
-    for path in sorted(TRANSFORM_DIRECTORY.glob("*.py")):
-        digest.update(path.name.encode())
+    for path in sorted(TRANSFORM_DIRECTORY.rglob("*.py")):
+        digest.update(path.relative_to(TRANSFORM_DIRECTORY).as_posix().encode())
         digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
     return digest.hexdigest()

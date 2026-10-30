@@ -65,8 +65,13 @@ class PostgresRawRecordRepositoryDatabaseIT {
   }
 
   @Test
-  void whenCountingSource_thenLatestMainFileCountIsReturned() {
-    assertThat(repository.countBySource(DataSource.CANADIAN_NUTRIENT_FILE)).isEqualTo(5700);
+  void whenCountingSource_thenStoredRecordsOfLatestMainFileAreCounted() {
+    assertThat(repository.countBySource(DataSource.CANADIAN_NUTRIENT_FILE)).isEqualTo(1);
+  }
+
+  @Test
+  void whenCountingOpenFoodFacts_thenStoredProductRowsAreCounted() {
+    assertThat(repository.countBySource(DataSource.OPEN_FOOD_FACTS)).isEqualTo(2);
   }
 
   @Test

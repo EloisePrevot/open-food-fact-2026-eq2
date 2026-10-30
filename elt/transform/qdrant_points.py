@@ -40,11 +40,14 @@ def recipe_search_text(recipe: dict[str, Any]) -> str:
 
 
 def product_search_text(product: dict[str, Any]) -> str:
+    """Le texte vectorisé utilise les noms nettoyés (voir ``description_cleaning``)."""
+    categories = product.get("categoriesPrecises", product.get("categories")) or [product["categorie"] or ""]
     return join_words(
-        product["nomProduit"],
-        product.get("nomEn") or "",
+        product.get("nomNettoye") or product["nomProduit"],
+        product.get("nomEnNettoye") or product.get("nomEn") or "",
+        " ".join(product.get("nomsAlternatifs") or []),
         product.get("nomGenerique") or "",
         " ".join(product["marques"]),
-        " ".join(product.get("categories") or [product["categorie"] or ""]),
+        " ".join(categories),
         product.get("ingredientsTexte") or "",
     )

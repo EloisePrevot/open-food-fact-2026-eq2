@@ -25,8 +25,8 @@ services:
     volumes:
       - ./elt/raw:/app/elt/raw:ro
     depends_on:
-      postgres:
-        condition: service_healthy
+      postgres-restore:
+        condition: service_completed_successfully
       mongo-restore:
         condition: service_completed_successfully
       qdrant:
@@ -133,6 +133,36 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+
+  # Restaure le brut de l'échantillon publié si la base est vide.
+  postgres-restore:
+    image: postgres:16
+    entrypoint: ["sh", "/scripts/restore.sh"]
+    environment:
+      POSTGRES_URI: postgresql://postgres:postgres@postgres:5432/open_food_facts
+    volumes:
+      - snapshots:/snapshots:ro
+      - ./docker/postgres/restore.sh:/scripts/restore.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      snapshots:
+        condition: service_completed_successfully
+
+  # Exporte le brut de l'échantillon vers elt/snapshots/ (après --export-postgres-sample) :
+  # docker compose run --rm postgres-dump
+  postgres-dump:
+    image: postgres:16
+    profiles: ["export"]
+    entrypoint: ["sh", "/scripts/dump.sh"]
+    environment:
+      POSTGRES_SAMPLE_URI: postgresql://postgres:postgres@postgres:5432/open_food_facts_echantillon
+    volumes:
+      - ./elt/snapshots:/export
+      - ./docker/postgres/dump.sh:/scripts/dump.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   qdrant_data:

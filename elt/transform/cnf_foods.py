@@ -8,7 +8,10 @@ from functools import partial
 from typing import Any
 
 from extract.extract import CNF_SOURCE
+from transform.description_cleaning import clean_name
 from transform.ingredient_identity import ingredient_keys
+from transform.nutri_score import cnf_nutri_score
+from transform.nutri_score import document_fields as nutri_score_fields
 from transform.raw_records import RawRow, clean_rows, iter_payloads, iter_raw_rows
 from transform.values import french_or_english, optional_text, text, to_float, to_int
 
@@ -42,9 +45,13 @@ def clean_cnf_food(row: RawRow, lookups: CnfLookups) -> dict[str, Any] | None:
     if not food_id or not (french or english):
         return None
 
-    group = lookups.groups.get(text(food.get("FoodGroupID")), {})
+    group_id = text(food.get("FoodGroupID"))
+    group = lookups.groups.get(group_id, {})
     origin = lookups.food_sources.get(text(food.get("FoodSourceID")), {})
+    nutrients = lookups.nutrients.get(food_id, {})
     identifiant = f"cnf:{food_id}"
+    cleaned = clean_name(french or english, remove_claims=False)
+    cleaned_english = clean_name(english, remove_claims=False) if english else None
     return {
         "_id": identifiant,
         "identifiant": identifiant,
@@ -54,16 +61,23 @@ def clean_cnf_food(row: RawRow, lookups: CnfLookups) -> dict[str, Any] | None:
         "nomProduit": french or english,
         "nomFr": french,
         "nomEn": english,
+        "nomNettoye": cleaned.name,
+        "nomEnNettoye": cleaned_english.name if cleaned_english else "",
+        "nomsAlternatifs": list(
+            dict.fromkeys(
+                (*cleaned.alternative_names, *(cleaned_english.alternative_names if cleaned_english else ()))
+            )
+        ),
         "nomScientifique": optional_text(food.get("ScientificName")),
         "marque": None,
         "marques": [],
         "categorie": french_or_english(group, "FoodGroupName"),
         "categorieEn": optional_text(group.get("FoodGroupName")),
         "origineDonnee": french_or_english(origin, "FoodSourceDescription"),
-        "nutriScore": None,
+        **nutri_score_fields(cnf_nutri_score(group_id, english, nutrients)),
         "nova": None,
         "ecoScore": None,
-        "nutriments": lookups.nutrients.get(food_id, {}),
+        "nutriments": nutrients,
         "nutrimentsBase": "100 g",
         "mesures": lookups.measures.get(food_id, []),
         "dechets": lookups.refuse.get(food_id, []),

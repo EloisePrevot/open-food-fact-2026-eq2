@@ -2,12 +2,11 @@ package ca.ulaval.glo4003.application.recipes;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 
 import ca.ulaval.glo4003.application.matching.IngredientMatchingService;
 import ca.ulaval.glo4003.application.matching.ProductPreferences;
@@ -110,7 +109,9 @@ class RecipeServiceTest {
     assertThat(result.nom).isEqualTo("Soup");
     assertThat(result.description).isEqualTo("A warm soup");
     assertThat(result.etapes).containsExactly("Chop the carrots.", "Simmer.");
-    assertThat(result.ingredients).extracting(ingredient -> ingredient.cle).containsExactly("carrot");
+    assertThat(result.ingredients)
+        .extracting(ingredient -> ingredient.cle)
+        .containsExactly("carrot");
   }
 
   @Test

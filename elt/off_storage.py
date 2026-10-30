@@ -24,19 +24,23 @@ def replace_off_products(connection: psycopg.Connection, records: Iterable[RawRe
     iterator = iter(records)
     first = next(iterator, None)
     columns = list(first.payload) if first else []
-    _recreate_table(connection, columns)
+    recreate_table(connection, columns)
     if first is None:
         return 0
     count = _copy_rows(connection, columns, chain([first], iterator))
+    add_primary_key(connection)
+    return count
+
+
+def add_primary_key(connection: psycopg.Connection) -> None:
     connection.execute(
         sql.SQL("ALTER TABLE {} ADD PRIMARY KEY ({})").format(
             sql.Identifier(TABLE), sql.Identifier(ORDINAL_COLUMN)
         )
     )
-    return count
 
 
-def _recreate_table(connection: psycopg.Connection, columns: list[str]) -> None:
+def recreate_table(connection: psycopg.Connection, columns: list[str]) -> None:
     definitions = [sql.SQL("{} BIGINT NOT NULL").format(sql.Identifier(ORDINAL_COLUMN))]
     definitions += [sql.SQL("{} TEXT").format(sql.Identifier(column)) for column in columns]
     connection.execute(sql.SQL("DROP TABLE IF EXISTS {}").format(sql.Identifier(TABLE)))

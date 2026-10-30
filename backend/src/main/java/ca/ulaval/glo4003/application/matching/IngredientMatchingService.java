@@ -68,7 +68,8 @@ public class IngredientMatchingService {
     Map<String, ProductDocument> products = findByIds(scoredProducts);
     return scoredProducts.stream()
         .filter(scored -> products.containsKey(scored.identifiant()))
-        .map(scored -> new ScoredProductDocument(scored.score(), products.get(scored.identifiant())))
+        .map(
+            scored -> new ScoredProductDocument(scored.score(), products.get(scored.identifiant())))
         .filter(scored -> preferences.accepts(scored.product()))
         .limit(limit)
         .toList();

@@ -1,15 +1,16 @@
 package ca.ulaval.glo4003.application.matching;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import ca.ulaval.glo4003.application.products.model.ProductDocument;
+import ca.ulaval.glo4003.application.shared.InvalidRequestException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ProductPreferencesTest {
 
-  private static final ProductPreferences NO_PREFERENCE =
-      new ProductPreferences(null, null, null);
+  private static final ProductPreferences NO_PREFERENCE = new ProductPreferences(null, null, null);
 
   private static ProductDocument product(String nutriScore, Integer nova, List<String> marques) {
     return new ProductDocument("off:1", "Produit", false, nutriScore, nova, marques);
@@ -59,6 +60,31 @@ class ProductPreferencesTest {
     assertThat(preferences.accepts(product(null, null, List.of("Bonduelle")))).isTrue();
     assertThat(preferences.accepts(product(null, null, List.of("Autre")))).isFalse();
     assertThat(preferences.accepts(product(null, null, List.of()))).isFalse();
+  }
+
+  @Test
+  void givenBlankNutriScoreMin_thenNoNutriScoreFilterIsApplied() {
+    ProductPreferences preferences = new ProductPreferences(null, "  ", null);
+
+    assertThat(preferences.accepts(product(null, null, List.of()))).isTrue();
+  }
+
+  @Test
+  void givenNutriScoreMinOutsideAToE_thenRequestIsRejected() {
+    assertThatThrownBy(() -> new ProductPreferences(null, "Z", null))
+        .isInstanceOf(InvalidRequestException.class);
+  }
+
+  @Test
+  void givenNovaMaxBelowOne_thenRequestIsRejected() {
+    assertThatThrownBy(() -> new ProductPreferences(null, null, 0))
+        .isInstanceOf(InvalidRequestException.class);
+  }
+
+  @Test
+  void givenNovaMaxAboveFour_thenRequestIsRejected() {
+    assertThatThrownBy(() -> new ProductPreferences(null, null, 5))
+        .isInstanceOf(InvalidRequestException.class);
   }
 
   @Test

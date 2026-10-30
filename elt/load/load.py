@@ -8,6 +8,7 @@ from connections import DatabaseConnections, open_postgres_connection
 from extract.extract import SUPPORTED_SOURCES, get_raw_artifacts
 from extract.raw_extractors import extractor_for
 from load.mongo_storage import run_mongo_loads
+from load.postgres_sample import SAMPLE_DATABASE, export_postgres_sample
 from load.qdrant_snapshots import export_snapshots
 from load.qdrant_storage import run_qdrant_loads
 from raw_models import RawArtifact
@@ -45,6 +46,12 @@ def export_qdrant_snapshots(settings: Settings) -> None:
     print(f"Snapshots Qdrant exportés : {manifest.read_text(encoding='utf-8')}")
 
 
+def export_postgres_sample_database(settings: Settings) -> None:
+    with DatabaseConnections.connect(settings) as connections:
+        summary = export_postgres_sample(settings, connections.mongo_database)
+    print(f"Échantillon brut copié dans la base {SAMPLE_DATABASE} : {summary}")
+
+
 def _ingest(data_store: RawDataStore, artifact: RawArtifact) -> int:
     record_count = data_store.ingest(artifact, extractor_for(artifact).extract(artifact))
     if record_count is None:
@@ -64,6 +71,11 @@ def _parse_arguments() -> tuple[ArgumentParser, Namespace]:
     parser.add_argument("--load-qdrant", action="store_true", help="indexe PostgreSQL dans Qdrant")
     parser.add_argument(
         "--export-qdrant-snapshots", action="store_true", help="exporte les collections Qdrant en snapshots"
+    )
+    parser.add_argument(
+        "--export-postgres-sample",
+        action="store_true",
+        help="copie le brut de l'échantillon servi par MongoDB dans une base à publier",
     )
     parser.add_argument(
         "--limit", type=int, default=1000, help="documents maximum par source (0 = aucune limite)"
@@ -92,9 +104,12 @@ def main() -> None:
         print(f"Qdrant load completed. Summary: {load_qdrant(limit, arguments.skip_up_to_date, settings)}")
     elif arguments.export_qdrant_snapshots:
         export_qdrant_snapshots(settings)
+    elif arguments.export_postgres_sample:
+        export_postgres_sample_database(settings)
     else:
         parser.error(
-            "Specify --check-connections, --load-raw, --load-mongo, --load-qdrant, or --export-qdrant-snapshots."
+            "Specify --check-connections, --load-raw, --load-mongo, --load-qdrant, "
+            "--export-qdrant-snapshots, or --export-postgres-sample."
         )
 
 

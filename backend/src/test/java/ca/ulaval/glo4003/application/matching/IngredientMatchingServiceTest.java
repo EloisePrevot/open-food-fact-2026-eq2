@@ -44,8 +44,7 @@ class IngredientMatchingServiceTest {
     productRepository = mock(ProductRepository.class);
     textEmbedder = mock(TextEmbedder.class);
     ingredientMatchingService =
-        new IngredientMatchingService(
-            ingredientSearchRepository, productRepository, textEmbedder);
+        new IngredientMatchingService(ingredientSearchRepository, productRepository, textEmbedder);
   }
 
   @Test
@@ -158,8 +157,7 @@ class IngredientMatchingServiceTest {
 
   @Test
   void givenBlankIngredient_whenMatching_thenRequestIsRejected() {
-    assertThatThrownBy(
-            () -> ingredientMatchingService.matchIngredient(request("   ", null, LIMIT)))
+    assertThatThrownBy(() -> ingredientMatchingService.matchIngredient(request("   ", null, LIMIT)))
         .isInstanceOf(InvalidRequestException.class);
 
     verifyNoInteractions(textEmbedder, ingredientSearchRepository, productRepository);
@@ -189,6 +187,16 @@ class IngredientMatchingServiceTest {
     IngredientMatchResponseDto response = ingredientMatchingService.matchIngredient(request);
 
     assertThat(response.candidats).isEmpty();
+  }
+
+  @Test
+  void givenInvalidNutriScoreMin_whenMatching_thenRequestIsRejectedBeforeSearching() {
+    IngredientMatchRequestDto request = request(INGREDIENT, null, LIMIT);
+    request.nutriScoreMin = "Z";
+
+    assertThatThrownBy(() -> ingredientMatchingService.matchIngredient(request))
+        .isInstanceOf(InvalidRequestException.class);
+    verifyNoInteractions(textEmbedder, ingredientSearchRepository, productRepository);
   }
 
   @Test

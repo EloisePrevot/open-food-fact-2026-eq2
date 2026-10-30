@@ -1,7 +1,7 @@
 #!/bin/sh
 set -u
 
-for file in recipes.snapshot ingredients.snapshot mongo.archive.gz; do
+for file in recipes.snapshot ingredients.snapshot mongo.archive.gz postgres.dump; do
   target="/snapshots/$file"
   if [ -f "$target" ]; then
     echo "$file : déjà téléchargé"
