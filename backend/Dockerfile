@@ -65,6 +65,8 @@ PY
 RUN rm -rf /tmp/en_fr /tmp/en_fr.argosmodel
 
 COPY elt ./elt
+COPY README.md ./README.md
+ENV README_PATH=/app/README.md
 # The application plugin names the distribution after rootProject.name.
 COPY --from=build /app/build/install/equipe2-bd/ ./
 

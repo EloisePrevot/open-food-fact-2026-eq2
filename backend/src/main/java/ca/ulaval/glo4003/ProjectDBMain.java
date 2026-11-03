@@ -6,6 +6,8 @@ import ca.ulaval.glo4003.application.etl.EtlService;
 import ca.ulaval.glo4003.application.matching.IngredientMatchingService;
 import ca.ulaval.glo4003.application.recipes.RecipeService;
 import ca.ulaval.glo4003.application.search.TextEmbedder;
+import ca.ulaval.glo4003.infrastructure.documentation.DocumentationConfiguration;
+import ca.ulaval.glo4003.infrastructure.documentation.FileReadmeRepository;
 import ca.ulaval.glo4003.infrastructure.embedding.EmbeddingConfiguration;
 import ca.ulaval.glo4003.infrastructure.embedding.OnnxTextEmbedder;
 import ca.ulaval.glo4003.infrastructure.etl.EtlConfiguration;
@@ -125,7 +127,9 @@ public class ProjectDBMain {
 
   private static DocumentationResource createDocumentationResource() {
     LOGGER.info("Setup documentation resource");
-    return new DocumentationResourceImpl(new DocumentationService());
+    return new DocumentationResourceImpl(
+        new DocumentationService(
+            new FileReadmeRepository(DocumentationConfiguration.fromEnvironment().readmePath())));
   }
 
   private static RecipeResource createRecipeResource(

@@ -10,6 +10,6 @@ import jakarta.ws.rs.core.Response;
 public interface DocumentationResource {
 
   @GET
-  @Produces(MediaType.TEXT_PLAIN)
+  @Produces(MediaType.TEXT_PLAIN + ";charset=UTF-8")
   Response getReadme();
 }

@@ -1,10 +1,14 @@
 package ca.ulaval.glo4003.application.documentation;
 
-import ca.ulaval.glo4003.application.shared.NotImplementedException;
-
 public class DocumentationService {
 
+  private final ReadmeRepository readmeRepository;
+
+  public DocumentationService(ReadmeRepository readmeRepository) {
+    this.readmeRepository = readmeRepository;
+  }
+
   public String getReadme() {
-    throw new NotImplementedException();
+    return readmeRepository.readReadme();
   }
 }

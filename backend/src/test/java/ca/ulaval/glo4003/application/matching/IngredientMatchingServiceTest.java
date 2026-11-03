@@ -25,7 +25,7 @@ class IngredientMatchingServiceTest {
   private static final float[] VECTOR = {0.1f, 0.2f};
   private static final String INGREDIENT = "farine tout usage";
   private static final int LIMIT = 10;
-  private static final int SEARCH_LIMIT = 50;
+  private static final int SEARCH_LIMIT = 100;
 
   private static final ProductDocument ENRICHED_FLOUR =
       new ProductDocument(
