@@ -373,10 +373,11 @@ Les données conservées dans ce moteur sont les données brutes extraites de no
 | `YieldDescriptionF` | `quantité requise pour préparer  100ml` |
 
 ### 3. Modèle de données envisagé
-Nos trois sources de données contiennent 14 fichiers CSV. Le moteur PostgreSQL va ainsi contenir une table par fichier, soit 14 tables. 
-* La source de recettes représente une seule table.
-* La source OFF contient les produits à code barre et représente une seule table.
-* La source CNF contient les produits de base et représente 12 tables.
+Nos trois sources de données contiennent 14 fichiers CSV. Pour la structure de Postgres on aura 3 tables.
+* Une table pour les documents et leur hash 
+* CNF et Kaggle dans une table avec des données en JSON
+* OFF dans une table typée
+Pourquoi on utilise une table typée ici? OFF a beaucoup de données et répéter tous les types dans chaque JSON prend beaucoup d'espace. Donc pour des soucis d'optimisation on fait une table typée qui écrit les noms une seule fois. 
 
 ### 4. Requêtes de l'application servies
 | Route | Moteur |
@@ -385,11 +386,11 @@ Nos trois sources de données contiennent 14 fichiers CSV. Le moteur PostgreSQL 
 | GET /extracted_data | PostgreSQL |
 
 ### 5. Données présentes dans plus d'un moteur
-Les données de ces modèles sont dans la plupart des cas utilisés dans une autre base de données. Par exemple, les produits de l'Amérique du Nord de OFF et les autres éléments des bases de données de recette et la CNF se retrouve dans la base de données Mongo. Puisque cette base de données sert seulement à chercher données sans filtres, la priorité sera toujours les données traitées, c’est à dire Mongo. 
+Les données de ces modèles sont dans la plupart des cas utilisées dans une autre base de données. Par exemple, les produits de l'Amérique du Nord de OFF et les autres éléments des bases de données de recette et la CNF se retrouvent dans la base de données Mongo. Puisque cette base (PostgreSQL) de données sert seulement à chercher des données sans filtre, la priorité sera toujours les données traitées, c’est à dire Mongo. 
 
 ### 6. Justification par les principes
 **Fiabilité**
-Cette BD doit simplement contenir les données brutes et l'importation des données peut se faire très facilement grâce à un script Python. Ce moteur peut aussi être utilisé en lecture seul, ce qui garantit l'immuabilité des données. Il est aussi possible de créer des index pour accélérer la lecture des données.
+Cette BD doit simplement contenir les données brutes et l'importation des données peut se faire très facilement grâce à un script Python. Ce moteur peut aussi être utilisé en lecture seule, ce qui garantit l'immuabilité des données. Il est aussi possible de créer des index pour accélérer la lecture des données.
 
 **Maintenabilité**
 PostgreSQL est portable et extensible, ce qui permet d'avoir une meilleure maintenabilité. Il y a des outils visuels si la nécessité se présente. PostgreSQL est supporté par beaucoup de plateformes. C'est un des plus utilisés, donc il y a plus de documentations.
@@ -401,11 +402,11 @@ Ajouter une source ne demande aucune modification du schéma : il suffit d'une n
 ## Moteur 2 : MongoDB - Document
 
 ### 1. Type de données conservées
-Recettes – type : recettes propres, traduite en français et un champ type
+Recettes – type : recettes propres, traduites en français et un champ type
 
 Produits : catalogues des produits nettoyés de OFF et CNF
 
-Volume et échantillonnage: PostgreSQL conserve l'extraction brute complète; les DBs MongoDB et Qdrant sont un sous-échantillon de 50 000 produits et 10 000 recettes. L'échantillon est stratifié par catégorie (catégorie alimentaire pour les produits, type pour les recettes). Les documents sont regroupés par catégorie puis prélevés à tour de rôle jusqu'à la cible de sorte que les catégories rares (par exemple farine d'amande, poudre à pâte) soient conservées plutôt que noyées par les catégories dominantes. Un tirage par les premiers arrivés ou purement aléatoire les ferait disparaître et fausserait l'appariement.
+Volume et échantillonnage : PostgreSQL conserve l'extraction brute complète; les DBs MongoDB et Qdrant sont un sous-échantillon de 50 000 produits et 10 000 recettes. L'échantillon est stratifié par catégorie (catégorie alimentaire pour les produits, type pour les recettes). Les documents sont regroupés par catégorie puis prélevés à tour de rôle jusqu'à la cible de sorte que les catégories rares (par exemple farine d'amande, poudre à pâte) soient conservées plutôt que noyées par les catégories dominantes. Un tirage par les premiers arrivés ou purement aléatoire les ferait disparaître et fausserait l'appariement.
 
 ### 2. Exemple réel de chaque donnée conservée
 
@@ -512,7 +513,7 @@ Volume et échantillonnage: PostgreSQL conserve l'extraction brute complète; le
 | `nomEn` | `string` | Non | — |
 | `description` | `string` | Non | — |
 | `descriptionEn` | `string` | Non | — |
-| `type` | `string` | Non | — |
+| `type` | `array<string>` | Non | — |
 | `nbIngredients` | `int` | Non | minimum : 1 |
 | `ingredients` | `array<string>` | Non | — |
 
@@ -539,25 +540,25 @@ Volume et échantillonnage: PostgreSQL conserve l'extraction brute complète; le
 | POST /cuisiner | MongoDB |
 
 ### 5. Données présentes dans plus d'un moteur
-Certaines données des ingrédients et des recettes, tels que la description et les étapes de préparation seront doublé dans Mongo et dans la base de données non filtré (BD1).  À la différence de Mongo, Qdrant  ne possède que les données nécessaires pour la création de vecteur, donc dans notre cas, la source véridique sera toujours Mongo DB. Une fois que les données de la base de données 1 soit transféré, Mongo à priorité sur les autres. 
+Certaines données des ingrédients et des recettes, telles que la description et les étapes de préparation seront doublées dans Mongo et dans la base de données non filtrée (BD1).  À la différence de Mongo, Qdrant ne possède que les données nécessaires pour la création de vecteur, donc dans notre cas, la source véridique sera toujours Mongo DB. Une fois que les données de la base de données 1 sont transférées, Mongo a priorité sur les autres. 
 
 ### 6. Justification par les principes
 **Fiabilité**
-On peut reconstruire la BD facilement à partir de la BD1, donc si jamais une erreur survient dans la BD elle sera détruite à la reconstruction et l’erreur disparait au lieu de rester dans nos données ce qui est plus fiable.
+On peut reconstruire la BD facilement à partir de la BD1, donc si jamais une erreur survient dans la BD elle sera détruite à la reconstruction et l’erreur disparaît au lieu de rester dans nos données ce qui est plus fiable.
 
 **Maintenabilité**
 Les routes sont simples à implémenter et à comprendre. Ce sont de simples find, ce qui aide à la maintenabilité du système.
 
 **Extensibilité**
-Mongo a seulement à lire un id et retrouver le bon document avec toutes l’informations. De plus, ajouter un champ ou une source ne brise pas les documents existants.
+Mongo a seulement à lire un id et retrouver le bon document avec toutes les informations. De plus, ajouter un champ ou une source ne brise pas les documents existants.
 
 
 ## Moteur 3 : Qdrant - Vectoriel
 
 ### 1. Type de données conservées
-Dans notre base de données vectorielle, nous allons conserver les données nécessaires à la recherche des recettes. En ce référent à la base de données Extended Recipes Dataset : 64K nous allons utiliser les champs suivants : Le titre de la recette, la catégorie de la recette, la sous-catégorie de la recette, la description, les directions, les goûts, la vitesse de cuisine, l’estimation de temps de préparation et l’estimation de temps de cuisson, la difficulté, le pointage de santé et le profile diététique qui inclut la présence de noix ou si la nourriture est végan.   
+Dans notre base de données vectorielle, nous avons conservé les données nécessaires à la recherche des recettes. En se référant à la base de données Extended Recipes Dataset : 64K nous avons utilisé les champs suivants : Le titre de la recette, la catégorie de la recette, la sous-catégorie de la recette, la description, les directions, les goûts, la vitesse de cuisson, l’estimation de temps de préparation et l’estimation de temps de cuisson, la difficulté, le pointage de santé et le profil diététique qui inclut la présence de noix ou si la nourriture est végan.   
 
-Si nous décidons aussi de mettre les ingrédients dans une collection pour avoir de meilleurs résultats d’association. Les champs seront donc l’identifiant, le nom du produit, la compagnie, la catégorie.    
+Nous avons décidé de mettre les ingrédients dans une collection pour avoir de meilleurs résultats d’association (que la recherche par mot seulement). Les champs seront donc l’identifiant, le nom du produit, la compagnie, la catégorie.    
 
 ### 2. Exemple réel de chaque donnée conservée
 | Colonne | Valeur |
@@ -589,8 +590,7 @@ Pour les ingrédients,
 
 ### 3. Modèle de données envisagé
 Il va y avoir la collection des recettes. Chaque recette est un vecteur qui représente le sens des informations de la recette.   
-
-Puis dans le cas où il faut faire de la recherche vectorielle avec les ingrédients, il faut aussi une collection pour les ingrédients qui seront eux aussi représentés dans des vecteurs.  
+Il y a aussi une seconde collection pour les ingrédients. Le modèle utilisé est le "paraphrase-multilingual-MiniLM-L12-v2", il a été choisi car il est petit (il permet de mettre plus de données facilement), et parce qu'il permet le multilangue. 
 
 ### 4. Requêtes de l'application servies
 | Route | Moteur |
@@ -600,7 +600,7 @@ Puis dans le cas où il faut faire de la recherche vectorielle avec les ingrédi
 | POST /cuisiner | Qdrant |
 
 ### 5. Données présentes dans plus d'un moteur
-Les données des ingrédients seront dans plusieurs moteurs, car dans le cas plusieurs informations ne seront pas utilisées pour la recherche et qu’un autre type de base de données est plus avantageux. En cas de divergence, l’id doit rester le plus possible identique et vers le même produit. Par contre, si la description change, la priorité sera à la seconde base de données faite pour retenir les informations des produits.   
+Les données des ingrédients seront dans plusieurs moteurs, car plusieurs informations ne seront pas utilisées pour la recherche et qu’un autre type de base de données est plus avantageux. En cas de divergence, l’id doit rester le plus possible identique et vers le même produit. Par contre, si la description change, la priorité sera à la seconde base de données faite pour retenir les informations des produits.   
 
 ### 6. Justification par les principes
 **Fiabilité**
@@ -611,3 +611,9 @@ Pas besoin d’avoir des jointures et des recherches complexes dans la base de d
 
 **Extensibilité**
 Ajouter des recettes avec une base vectorielle sera facile, il suffit de calculer le nouveau vecteur et de l’ajouter, ce qui rend la base de données extensible.
+
+
+## Moteur 4 (envisagé) SQLite:
+Les points étaient les mêmes que pour le premier moteur mais à l'exception que c'était pour SQLite et non PostgreSQL.
+Il a été complètement retiré et remplacé, donc il n'y a pas de recouvrement.
+Il a été remplacé car ce n'était pas considéré comme un moteur avec le retour de la remise 1. 
