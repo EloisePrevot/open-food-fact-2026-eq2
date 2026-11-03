@@ -1,0 +1,3 @@
+Section 3.2, puis Architechture.md a été modifié (surtout le moteur 1), puis finalement l'ajout du moteur 4 envisagé (toujours dans Architechture.md). 
+Dans la remise précédente, nous avions utilisé SQLite comme base de données, ce qui n'est pas considéré comme un moteur, car un moteur doit être un service distinct alors SQLite est une bibliothèque intégrée avec seulement un fichier simple.  Donc pour garder les bonnes propriétés du SQL, nous avons choisi d'utiliser PostgreSQL. PostgreSQL est très rependu, donc on peut trouver beaucoup de documentation et de tutoriel sur la base de données, c'est pourquoi nous l'avons choisi. Avec l'implication de ce changement, l'architechture.md a été corrigé.  
+
