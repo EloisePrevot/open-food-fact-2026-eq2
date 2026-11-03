@@ -1,0 +1,27 @@
+info:
+  name: R2 | GET /donnees_brutes/{{idBrut}}
+  type: http
+  seq: 4
+
+http:
+  method: GET
+  url: http://{{baseUrl}}/donnees_brutes/off:00000028
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('GET /donnees_brutes/{id} : 200', () => expect(res.getStatus()).to.equal(200));
+        const d = res.getBody();
+        test('clés source et dateIngestion renseignées', () => { expect(JSON.stringify(d)).to.include('"source"'); expect(JSON.stringify(d)).to.include('"dateIngestion"'); });
+        console.log('Enregistrement brut (à comparer à l\'original, non transformé) : ' + JSON.stringify(res.getBody()).slice(0, 800));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
+
+docs: Renseigner idBrut avec l'identifiant d'un produit, puis refaire avec une autre source.
