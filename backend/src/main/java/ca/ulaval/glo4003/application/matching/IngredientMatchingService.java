@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 
 public class IngredientMatchingService {
 
-  private static final int OVER_FETCH_FACTOR = 5;
+  private static final int OVER_FETCH_FACTOR = 10;
   private static final int MIN_BRAND_QUERY_LENGTH = 2;
   private static final int DEFAULT_BRAND_SUGGESTIONS = 10;
 

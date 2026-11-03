@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import ca.ulaval.glo4003.application.data.model.DataSource;
 import ca.ulaval.glo4003.application.data.model.RawRecord;
+import ca.ulaval.glo4003.application.data.model.RawReference;
 import ca.ulaval.glo4003.application.products.ProductRepository;
 import ca.ulaval.glo4003.application.products.model.QualityIndicatorCounts;
 import ca.ulaval.glo4003.application.shared.NotFoundException;
@@ -21,20 +22,21 @@ import org.junit.jupiter.api.Test;
 class DataServiceTest {
 
   private static final String IDENTIFIANT = "off:000000000054";
+  private static final RawReference REFERENCE = new RawReference(IDENTIFIANT, 3, 42);
   private static final String PAYLOAD = "{\"code\":\"000000000054\",\"brands\":\"\"}";
   private static final String INGESTED_AT = "2026-10-10T15:04:00+00:00";
 
   private RawRecordRepository rawRecordRepository;
-  private RawDataRepository rawDataRepository;
+  private RawReferenceRepository rawReferenceRepository;
   private ProductRepository productRepository;
   private DataService dataService;
 
   @BeforeEach
   void setUp() {
     rawRecordRepository = mock(RawRecordRepository.class);
-    rawDataRepository = mock(RawDataRepository.class);
+    rawReferenceRepository = mock(RawReferenceRepository.class);
     productRepository = mock(ProductRepository.class);
-    dataService = new DataService(rawRecordRepository, rawDataRepository, productRepository);
+    dataService = new DataService(rawRecordRepository, rawReferenceRepository, productRepository);
   }
 
   @Test
@@ -67,7 +69,8 @@ class DataServiceTest {
 
   @Test
   void givenKnownIdentifiant_whenGettingRawData_thenOriginalPayloadIsReturned() {
-    when(rawDataRepository.findByIdentifiant(IDENTIFIANT))
+    when(rawReferenceRepository.findByIdentifiant(IDENTIFIANT)).thenReturn(Optional.of(REFERENCE));
+    when(rawRecordRepository.findByReference(REFERENCE))
         .thenReturn(
             Optional.of(
                 new RawRecord(IDENTIFIANT, DataSource.OPEN_FOOD_FACTS, INGESTED_AT, PAYLOAD)));
@@ -82,7 +85,16 @@ class DataServiceTest {
 
   @Test
   void givenUnknownIdentifiant_whenGettingRawData_thenNotFoundIsThrown() {
-    when(rawDataRepository.findByIdentifiant(IDENTIFIANT)).thenReturn(Optional.empty());
+    when(rawReferenceRepository.findByIdentifiant(IDENTIFIANT)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> dataService.getRawData(IDENTIFIANT))
+        .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void givenMissingRawRecord_whenGettingRawData_thenNotFoundIsThrown() {
+    when(rawReferenceRepository.findByIdentifiant(IDENTIFIANT)).thenReturn(Optional.of(REFERENCE));
+    when(rawRecordRepository.findByReference(REFERENCE)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> dataService.getRawData(IDENTIFIANT))
         .isInstanceOf(NotFoundException.class);

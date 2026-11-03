@@ -17,9 +17,7 @@ from transform.french_fields import fill_french_fields
 from transform.transform import DOCUMENT_SOURCES, PRODUCT, RECIPE, DocumentSource
 
 COLLECTIONS = {RECIPE: "recipes", PRODUCT: "products"}
-RAW_COLLECTION = "donnees_brutes"
 STATE_COLLECTION = "etat_chargements"
-RAW_PAYLOAD_FIELD = "_chargeBrute"
 BATCH_SIZE = 1_000
 
 
@@ -38,7 +36,6 @@ class MongoDataStore:
             unique=True,
             partialFilterExpression={"codeBarres": {"$type": "string"}},
         )
-        self._database[RAW_COLLECTION].create_index([("source", ASCENDING)])
 
     def upsert(
         self,
@@ -51,15 +48,9 @@ class MongoDataStore:
         total = 0
         for batch in batched(documents, BATCH_SIZE):
             translated = fill_french_fields(kind, batch)
-            served = [_split_raw_payload(document, loaded_at) for document in translated]
             self._database[collection].bulk_write(
-                [_replace(document, loaded_at) for document, _ in served], ordered=False
+                [_replace(document, loaded_at) for document in translated], ordered=False
             )
-            raw = [raw_document for _, raw_document in served if raw_document is not None]
-            if raw:
-                self._database[RAW_COLLECTION].bulk_write(
-                    [_replace_raw(raw_document) for raw_document in raw], ordered=False
-                )
             total += len(batch)
             if progress is not None:
                 progress.update(total)
@@ -67,9 +58,7 @@ class MongoDataStore:
 
     def purge_stale(self, collection: str, source: str, loaded_at: str) -> int:
         stale = {"source": source, "_meta.chargeLe": {"$ne": loaded_at}}
-        deleted = self._database[collection].delete_many(stale).deleted_count
-        self._database[RAW_COLLECTION].delete_many(stale)
-        return deleted
+        return self._database[collection].delete_many(stale).deleted_count
 
     def count(self, collection: str, source: str) -> int:
         return self._database[collection].count_documents({"source": source})
@@ -159,29 +148,3 @@ def _replace(document: dict[str, Any], loaded_at: str) -> ReplaceOne:
         {"_id": document["_id"]}, {**document, "_meta": {"chargeLe": loaded_at}}, upsert=True
     )
 
-
-def _split_raw_payload(
-    document: dict[str, Any], loaded_at: str
-) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """Sépare la charge brute du document servi.
-
-    Le document retourné en premier est allégé (sans la charge brute) et destiné
-    aux collections ``products``/``recipes``. Le second, s'il existe, est
-    l'enregistrement brut destiné à la collection ``donnees_brutes``.
-    """
-    payload = document.pop(RAW_PAYLOAD_FIELD, None)
-    if payload is None:
-        return document, None
-    raw_document = {
-        "_id": document["_id"],
-        "identifiant": document["identifiant"],
-        "source": document["source"],
-        "dateIngestion": loaded_at,
-        "chargeUtile": payload,
-        "_meta": {"chargeLe": loaded_at},
-    }
-    return document, raw_document
-
-
-def _replace_raw(raw_document: dict[str, Any]) -> ReplaceOne:
-    return ReplaceOne({"_id": raw_document["_id"]}, raw_document, upsert=True)

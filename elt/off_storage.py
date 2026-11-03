@@ -72,6 +72,7 @@ def _row(record: RawRecord, columns: list[str]) -> list[object]:
 
 
 def _value(value: object) -> str | None:
-    if value is None or value == "":
+    """Une valeur vide du TSV reste ``""`` : la route des données brutes la restitue telle qu'acquise."""
+    if value is None:
         return None
     return str(value).replace("\x00", "")

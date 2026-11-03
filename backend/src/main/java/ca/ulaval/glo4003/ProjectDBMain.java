@@ -13,7 +13,7 @@ import ca.ulaval.glo4003.infrastructure.etl.PythonEtlRunner;
 import ca.ulaval.glo4003.persistence.PersistenceClients;
 import ca.ulaval.glo4003.persistence.PersistenceConfiguration;
 import ca.ulaval.glo4003.persistence.mongo.MongoProductRepository;
-import ca.ulaval.glo4003.persistence.mongo.MongoRawDataRepository;
+import ca.ulaval.glo4003.persistence.mongo.MongoRawReferenceRepository;
 import ca.ulaval.glo4003.persistence.mongo.MongoRecipeRepository;
 import ca.ulaval.glo4003.persistence.postgres.PostgresRawRecordRepository;
 import ca.ulaval.glo4003.persistence.qdrant.QdrantIngredientSearchRepository;
@@ -119,7 +119,7 @@ public class ProjectDBMain {
     return new DataResourceImpl(
         new DataService(
             new PostgresRawRecordRepository(persistenceClients),
-            new MongoRawDataRepository(persistenceClients),
+            new MongoRawReferenceRepository(persistenceClients),
             new MongoProductRepository(persistenceClients)));
   }
 

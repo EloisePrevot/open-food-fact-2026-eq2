@@ -71,7 +71,6 @@ def clean_off_product(row: RawRow) -> dict[str, Any] | None:
         "nutrimentsBase": "100 g",
         "cles": ingredient_keys(generic_name, name),
         "refBrut": row.reference(),
-        "_chargeBrute": raw,
     }
 
 

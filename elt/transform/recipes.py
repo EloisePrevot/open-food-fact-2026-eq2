@@ -69,7 +69,6 @@ def clean_recipe(row: RawRow) -> dict[str, Any] | None:
         "profilDietetique": text_list(raw.get("dietary_profile")),
         "regime": {french: to_bool(raw.get(english)) for english, french in _DIET_FIELDS.items()},
         "refBrut": row.reference(),
-        "_chargeBrute": raw,
     }
 
 

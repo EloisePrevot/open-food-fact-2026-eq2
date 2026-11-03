@@ -84,7 +84,6 @@ def clean_cnf_food(row: RawRow, lookups: CnfLookups) -> dict[str, Any] | None:
         "rendements": lookups.yields.get(food_id, []),
         "cles": ingredient_keys(french, english),
         "refBrut": row.reference(),
-        "_chargeBrute": food,
     }
 
 

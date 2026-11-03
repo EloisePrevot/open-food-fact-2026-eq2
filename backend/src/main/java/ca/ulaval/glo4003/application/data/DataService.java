@@ -2,6 +2,7 @@ package ca.ulaval.glo4003.application.data;
 
 import ca.ulaval.glo4003.application.data.model.DataSource;
 import ca.ulaval.glo4003.application.data.model.RawRecord;
+import ca.ulaval.glo4003.application.data.model.RawReference;
 import ca.ulaval.glo4003.application.products.ProductRepository;
 import ca.ulaval.glo4003.application.products.model.QualityIndicatorCounts;
 import ca.ulaval.glo4003.application.shared.NotFoundException;
@@ -14,15 +15,15 @@ import java.util.Map;
 public class DataService {
 
   private final RawRecordRepository rawRecordRepository;
-  private final RawDataRepository rawDataRepository;
+  private final RawReferenceRepository rawReferenceRepository;
   private final ProductRepository productRepository;
 
   public DataService(
       RawRecordRepository rawRecordRepository,
-      RawDataRepository rawDataRepository,
+      RawReferenceRepository rawReferenceRepository,
       ProductRepository productRepository) {
     this.rawRecordRepository = rawRecordRepository;
-    this.rawDataRepository = rawDataRepository;
+    this.rawReferenceRepository = rawReferenceRepository;
     this.productRepository = productRepository;
   }
 
@@ -46,8 +47,12 @@ public class DataService {
   }
 
   public RawDataDto getRawData(String identifiant) {
+    RawReference reference =
+        rawReferenceRepository
+            .findByIdentifiant(identifiant)
+            .orElseThrow(() -> notFound(identifiant));
     RawRecord rawRecord =
-        rawDataRepository.findByIdentifiant(identifiant).orElseThrow(() -> notFound(identifiant));
+        rawRecordRepository.findByReference(reference).orElseThrow(() -> notFound(identifiant));
     return toRawDataDto(rawRecord);
   }
 
