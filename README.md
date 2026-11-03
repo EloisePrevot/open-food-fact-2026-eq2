@@ -13,6 +13,20 @@ docker compose down        # arrêter
 docker compose down -v     # effacer les données, puis relancer up -d --build
 ```
 
+Pour lancer le vrai pipeline elt de A-Z:
+```
+docker compose up -d --build
+docker compose logs -f backend
+docker compose exec backend sh /app/elt/reload.sh
+```
+
+Pour commencer de 0 directement (ne pas utiliser le dump):
+```
+docker compose down -v
+SNAPSHOTS_URL=http://invalid docker compose up -d --build
+```
+
+
 ---
 
 ## Routes

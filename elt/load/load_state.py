@@ -3,10 +3,7 @@ from __future__ import annotations
 import hashlib
 import psycopg
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
-
-TRANSFORM_DIRECTORY = Path(__file__).parents[1] / "transform"
 
 
 @dataclass(frozen=True)
@@ -36,7 +33,7 @@ def is_up_to_date(loaded: LoadState | None, requested: LoadState) -> bool:
 
 
 def source_version(postgres: psycopg.Connection, raw_source: str, *extras: str) -> str:
-    digest = hashlib.sha256(_rules_fingerprint().encode())
+    digest = hashlib.sha256()
     for part in (*extras, *_latest_artifacts(postgres, raw_source)):
         digest.update(f"{part}\n".encode())
     return digest.hexdigest()
@@ -61,11 +58,3 @@ def _latest_artifacts(postgres: psycopg.Connection, raw_source: str) -> list[str
         (raw_source,),
     )
     return [f"{path}:{sha256}" for path, sha256 in rows]
-
-
-def _rules_fingerprint() -> str:
-    digest = hashlib.sha256()
-    for path in sorted(TRANSFORM_DIRECTORY.rglob("*.py")):
-        digest.update(path.relative_to(TRANSFORM_DIRECTORY).as_posix().encode())
-        digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
-    return digest.hexdigest()

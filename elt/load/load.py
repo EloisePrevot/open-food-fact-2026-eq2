@@ -83,7 +83,7 @@ def _parse_arguments() -> tuple[ArgumentParser, Namespace]:
     parser.add_argument(
         "--skip-up-to-date",
         action="store_true",
-        help="ignore une source déjà chargée avec les mêmes données brutes et règles",
+        help="ignore une source déjà chargée avec les mêmes données brutes et la même limite",
     )
     return parser, parser.parse_args()
 
