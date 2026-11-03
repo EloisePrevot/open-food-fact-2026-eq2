@@ -26,3 +26,5 @@ docs/
 enonce.pdf
 __pycache__
 enonce.txt
+# Local Kiro skill (not shared)
+/.kiro/skills/word-report/
