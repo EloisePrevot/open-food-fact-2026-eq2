@@ -1,0 +1,47 @@
+opencollection: 1.0.0
+
+info:
+  name: "GLO-4035/7035 Open Food Facts : Remise 2 (étudiant)"
+  version: "1"
+config:
+  proxy:
+    inherit: true
+    config:
+      protocol: http
+      hostname: ""
+      port: ""
+      auth:
+        username: ""
+        password: ""
+      bypassProxy: ""
+
+request:
+  variables:
+    - name: baseUrl
+      value: localhost
+    - name: idBrut
+      value: A-REMPLACER
+    - name: idRecette
+      value: A-REMPLACER
+    - name: ingredientContient
+      value: lécithine de soja
+    - name: off_listes
+      value: "{}"
+    - name: off_extracted
+      value: '{"nbProduitsAlimentairesScannes":51429,"nbProduitsAlimentairesDeBase":5690,"nbRecettesCuisine":10000}'
+
+docs:
+  content: |-
+    Ce fichier s'importe dans Postman (Import) et dans Bruno (Import collection, format Postman).
+
+    Variables de la collection à ajuster :
+    - baseUrl : hôte et port de votre application, sans http:// (par exemple localhost ou localhost:8080).
+
+    Lancez ensuite la collection complète (Run collection dans Postman, Run dans Bruno).
+  type: text/markdown
+bundled: false
+extensions:
+  bruno:
+    ignore:
+      - node_modules
+      - .git

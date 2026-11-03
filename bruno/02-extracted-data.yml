@@ -1,0 +1,28 @@
+info:
+  name: R2 | GET /extracted_data
+  type: http
+  seq: 2
+
+http:
+  method: GET
+  url: http://{{baseUrl}}/extracted_data
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('GET /extracted_data : 200 et JSON', () => expect(res.getStatus()).to.equal(200));
+        const d = res.getBody();
+        const nums = Object.entries(d).filter(([k, v]) => typeof v === 'number');
+        test('au moins trois compteurs numériques (produits scannés, produits de base, recettes)', () => expect(nums.length).to.be.at.least(3));
+        test('compteurs > 0 (données réellement chargées)', () => expect(nums.every(([k, v]) => v > 0)).to.be.true);
+        console.log('extracted_data : ' + JSON.stringify(d));
+        bru.setCollectionVar('off_extracted', JSON.stringify(d));
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false

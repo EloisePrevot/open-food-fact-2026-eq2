@@ -1,0 +1,23 @@
+info:
+  name: R1-R3 | GET /heartbeat
+  type: http
+  seq: 1
+
+http:
+  method: GET
+  url: http://{{baseUrl}}/heartbeat
+  auth: inherit
+
+runtime:
+  scripts:
+    - type: after-response
+      code: |-
+        test('GET /heartbeat : 200 et nomApplication', () => { expect(res.getStatus()).to.equal(200); expect(res.getBody().nomApplication).to.be.a('string').and.not.empty; });
+        bru.setCollectionVar('off_listes', '{}');
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
+  forwardAuthorizationHeader: false
