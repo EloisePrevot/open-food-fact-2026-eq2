@@ -13,6 +13,7 @@ from load.batching import batched
 from load.load_state import LoadState, is_up_to_date, requested_state
 from load.progress import CountProgress
 from load.stratified_sample import category_of, resolve_limit, stratified_sample
+from load.translation_reuse import PREVIOUS_TRANSLATION_FIELDS, reuse_translations
 from transform.french_fields import fill_french_fields
 from transform.transform import DOCUMENT_SOURCES, PRODUCT, RECIPE, DocumentSource
 
@@ -44,10 +45,11 @@ class MongoDataStore:
         documents: Iterable[dict[str, Any]],
         loaded_at: str,
         progress: CountProgress | None = None,
+        stats: Counter | None = None,
     ) -> int:
         total = 0
         for batch in batched(documents, BATCH_SIZE):
-            translated = fill_french_fields(kind, batch)
+            translated = self._translate(collection, kind, batch, stats)
             self._database[collection].bulk_write(
                 [_replace(document, loaded_at) for document in translated], ordered=False
             )
@@ -55,6 +57,23 @@ class MongoDataStore:
             if progress is not None:
                 progress.update(total)
         return total
+
+    def _translate(
+        self, collection: str, kind: str, batch: list[dict[str, Any]], stats: Counter | None
+    ) -> list[dict[str, Any]]:
+        if kind != RECIPE:
+            return fill_french_fields(kind, batch)
+        reused, pending = reuse_translations(batch, self._previous_translations(collection, batch))
+        if stats is not None:
+            stats["traductionsReutilisees"] += len(reused)
+        return reused + fill_french_fields(kind, pending)
+
+    def _previous_translations(
+        self, collection: str, batch: list[dict[str, Any]]
+    ) -> dict[str, dict[str, Any]]:
+        ids = [document["_id"] for document in batch]
+        cursor = self._database[collection].find({"_id": {"$in": ids}}, PREVIOUS_TRANSLATION_FIELDS)
+        return {previous["_id"]: previous for previous in cursor}
 
     def purge_stale(self, collection: str, source: str, loaded_at: str) -> int:
         stale = {"source": source, "_meta.chargeLe": {"$ne": loaded_at}}
@@ -117,7 +136,7 @@ def _load(
     documents = stratified_sample(
         source.documents(connections.postgres, stats), limit, category_of(source.kind)
     )
-    stats["charges"] = store.upsert(collection, source.kind, documents, loaded_at, progress)
+    stats["charges"] = store.upsert(collection, source.kind, documents, loaded_at, progress, stats)
     progress.done(stats["charges"])
     stats["supprimes"] = 0 if limit else store.purge_stale(collection, source.source, loaded_at)
     stats["total"] = store.count(collection, source.source)
